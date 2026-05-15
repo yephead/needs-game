@@ -29,7 +29,7 @@ const SVG = {
           full: "Intro",
           hint: "pulse",
           verb: "Breathe",
-          gestureCue: "hold on inhale, release on fade",
+          gestureCue: "open / close",
           successMotif: [196, 294, 392],
           failureMotif: [116, 92],
           completionMoment: "first breath opens",
@@ -43,7 +43,7 @@ const SVG = {
           full: "Physiological",
           hint: "chain",
           verb: "Gather",
-          gestureCue: "sweep through linked needs",
+          gestureCue: "open hand over needs",
           successMotif: [246, 311, 392],
           failureMotif: [122, 104],
           completionMoment: "needs bloom into a chain",
@@ -57,7 +57,7 @@ const SVG = {
           full: "Safety",
           hint: "seal",
           verb: "Seal",
-          gestureCue: "touch posts between sweeps",
+          gestureCue: "palm shield",
           successMotif: [330, 440, 554],
           failureMotif: [92, 70],
           completionMoment: "the shelter locks",
@@ -71,7 +71,7 @@ const SVG = {
           full: "Love and belonging",
           hint: "thread",
           verb: "Thread",
-          gestureCue: "draw one line through hearts",
+          gestureCue: "open hand thread",
           successMotif: [294, 370, 494],
           failureMotif: [130, 110],
           completionMoment: "the bond becomes a constellation",
@@ -85,7 +85,7 @@ const SVG = {
           full: "Esteem",
           hint: "lock",
           verb: "Time",
-          gestureCue: "tap inside the lock",
+          gestureCue: "thumb / victory",
           successMotif: [440, 554, 740],
           failureMotif: [120, 82],
           completionMoment: "the mark locks in",
@@ -99,7 +99,7 @@ const SVG = {
           full: "Self-actualization",
           hint: "trace",
           verb: "Trace",
-          gestureCue: "follow the glowing next point",
+          gestureCue: "point / reach",
           successMotif: [349, 466, 622],
           failureMotif: [146, 116],
           completionMoment: "the path becomes a living mark",
@@ -113,7 +113,7 @@ const SVG = {
           full: "Transcendence",
           hint: "release",
           verb: "Release",
-          gestureCue: "send waves through the old symbols",
+          gestureCue: "sign pulse",
           successMotif: [262, 392, 523],
           failureMotif: [138, 98],
           completionMoment: "every tier answers",
@@ -2025,6 +2025,7 @@ const SVG = {
           if (level === "actual") drawActual();
           if (level === "beyond") drawBeyond();
           drawGestureCue(level, state.cueTime);
+          drawCameraAffordance(level);
           drawPlayer();
           if (state.transitioning) drawLevelUp(state.transitionKind, state.transitionTime);
         }
@@ -2503,6 +2504,172 @@ const SVG = {
         ctx.arc(x, y, 4.5, 0, TAU);
         ctx.fill();
         ctx.restore();
+      }
+
+      function drawCameraAffordance(key) {
+        if (!state.camera.enabled || state.transitioning || !state.started || state.complete) return;
+        const intent = state.camera.intent;
+        if (!intent) return;
+        const level = LEVELS[state.levelIndex] || LEVELS[0];
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        if (intent.source === "pose") drawPoseAffordance(key, intent, level);
+        else drawHandAffordance(key, intent, level);
+        ctx.restore();
+      }
+
+      function drawHandAffordance(key, intent, level) {
+        const x = intent.palmX || intent.x;
+        const y = intent.palmY || intent.y;
+        const active = isGestureHoldDown(intent);
+        const action = isGestureActionDown(intent);
+        const radius = handAffordanceRadius(key, intent);
+        drawActionHalo(x, y, radius, action ? level.color2 : level.color, active ? 0.34 : 0.18);
+
+        if (key === "body" && state.levelState.items) {
+          state.levelState.items.forEach((item) => {
+            if (item.collected) return;
+            const d = dist(item, { x, y });
+            if (d < radius * 1.12) {
+              softLine(x, y, item.x, item.y, item.kind % 2 ? level.color2 : level.color, clamp(0.28 * (1 - d / (radius * 1.12)), 0.04, 0.28));
+              ctx.strokeStyle = withAlpha(item.kind % 2 ? level.color2 : level.color, 0.22);
+              ctx.beginPath();
+              ctx.arc(item.x, item.y, item.r + 9 + Math.sin(state.time * 7 + item.kind) * 3, 0, TAU);
+              ctx.stroke();
+            }
+          });
+        } else if (key === "safety" && state.levelState.nodes) {
+          drawShield(x, y, 22 + (action ? 7 : 0), withAlpha(level.color2, 0.88));
+          state.levelState.nodes.forEach((node) => {
+            if (node.active) return;
+            const d = dist(node, { x, y });
+            if (d < radius * 1.04) softLine(x, y, node.x, node.y, level.color2, clamp(0.32 * (1 - d / (radius * 1.04)), 0.05, 0.32));
+          });
+        } else if (key === "love" && state.levelState.nodes) {
+          const next = nearestNode(state.levelState.nodes.filter((node) => !node.linked), { x: intent.x, y: intent.y });
+          drawHeart(x, y, 14 + (action ? 4 : 0), withAlpha(level.color2, 0.9));
+          if (next) softLine(intent.x, intent.y, next.x, next.y, level.color, 0.24);
+        } else if (key === "esteem") {
+          drawStar(intent.x, intent.y, 14 + (action ? 5 : 0), action ? level.color2 : level.color, true);
+        } else if (key === "actual" && state.levelState.path) {
+          const target = state.levelState.path[state.levelState.next];
+          if (target) {
+            softLine(intent.x, intent.y, target.x, target.y, level.color2, 0.26);
+            drawLeaf(target.x, target.y, 16 + Math.sin(state.time * 6) * 3, level.color2);
+          }
+        } else if (key === "beyond" && state.levelState.beacons) {
+          const beacon = state.levelState.beacons[state.levelState.current];
+          if (beacon) {
+            softLine(x, y, beacon.x, beacon.y, LEVELS[beacon.tierIndex].color, 0.22);
+            drawMiniGlyph(beacon.glyph, beacon.x, beacon.y, LEVELS[beacon.tierIndex].color);
+          }
+        }
+      }
+
+      function drawPoseAffordance(key, intent, level) {
+        const x = intent.centerX;
+        const y = intent.centerY;
+        const action = isGestureActionDown(intent);
+        const radius = poseAffordanceRadius(key, intent);
+        drawActionHalo(x, y, radius, action ? level.color2 : level.color, action ? 0.36 : 0.2);
+
+        if (key === "body" && state.levelState.items) {
+          state.levelState.items.forEach((item) => {
+            if (item.collected) return;
+            const d = dist(item, { x, y });
+            if (d < radius * 1.08) softLine(x, y, item.x, item.y, item.kind % 2 ? level.color2 : level.color, clamp(0.3 * (1 - d / (radius * 1.08)), 0.05, 0.3));
+          });
+        } else if (key === "safety" && state.levelState.nodes) {
+          drawShield(x, y, 42 + intent.spread * 18, withAlpha(level.color2, 0.76));
+          state.levelState.nodes.forEach((node) => {
+            if (node.active) return;
+            const d = dist(node, { x, y });
+            if (d < radius) softLine(x, y, node.x, node.y, level.color2, clamp(0.34 * (1 - d / radius), 0.06, 0.34));
+          });
+        } else if (key === "love" && intent.pose?.leftWrist && intent.pose?.rightWrist) {
+          softLine(intent.pose.leftWrist.x, intent.pose.leftWrist.y, intent.pose.rightWrist.x, intent.pose.rightWrist.y, level.color2, 0.42);
+          if (state.levelState.nodes) {
+            state.levelState.nodes.forEach((node) => {
+              if (node.linked) return;
+              const d = distanceToSegment(node, intent.pose.leftWrist, intent.pose.rightWrist);
+              if (d < 160) {
+                ctx.strokeStyle = withAlpha(level.color, clamp(0.34 * (1 - d / 160), 0.05, 0.34));
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, 20 + Math.sin(state.time * 6) * 3, 0, TAU);
+                ctx.stroke();
+              }
+            });
+          }
+        } else if (key === "esteem") {
+          const l = state.levelState;
+          if (l && Number.isFinite(l.target)) {
+            const tx = state.width * 0.5 + Math.cos(l.target) * 118;
+            const ty = state.height * 0.52 + Math.sin(l.target) * 118;
+            softLine(x, y, tx, ty, level.color2, 0.22);
+            drawStar(tx, ty, 18 + l.flash * 7, level.color2, true);
+          }
+        } else if (key === "actual" && state.levelState.path) {
+          const target = state.levelState.path[state.levelState.next];
+          if (target) {
+            const wrist = nearestPoint([intent.pose?.leftWrist, intent.pose?.rightWrist].filter(Boolean), target) || { x: intent.x, y: intent.y };
+            softLine(wrist.x, wrist.y, target.x, target.y, level.color2, 0.3);
+            drawLeaf(target.x, target.y, 18 + Math.sin(state.time * 7) * 4, level.color2);
+          }
+        } else if (key === "beyond" && state.levelState.beacons) {
+          const beacon = state.levelState.beacons[state.levelState.current];
+          if (beacon) {
+            const tier = LEVELS[beacon.tierIndex];
+            softLine(x, y, beacon.x, beacon.y, tier.color, 0.24);
+            drawActionHalo(beacon.x, beacon.y, 46 + beacon.charge * 30, tier.color, 0.42);
+          }
+        }
+      }
+
+      function handAffordanceRadius(key, intent) {
+        if (key === "body") return 100 + intent.spread * 74 + (intent.pinch || intent.fist ? 30 : 0);
+        if (key === "safety") return 88 + intent.spread * 70 + (intent.pinch || intent.fist ? 22 : 0);
+        if (key === "love") return 104 + intent.spread * 58;
+        if (key === "actual") return intent.point ? 122 : 96;
+        if (key === "beyond") return 86;
+        return 58;
+      }
+
+      function poseAffordanceRadius(key, intent) {
+        if (key === "body") return intent.star ? 230 : intent.jump ? 190 : intent.crouch ? 150 : 132;
+        if (key === "safety") return 150 + intent.spread * 124 + (intent.armsOpen ? 46 : 0);
+        if (key === "love") return 145 + intent.spread * 84;
+        if (key === "actual") return intent.star || intent.armsUp ? 172 : 132;
+        if (key === "beyond") return intent.star ? 170 : 126;
+        return intent.armsOpen ? 118 : 74;
+      }
+
+      function drawActionHalo(x, y, radius, color, alpha) {
+        if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) return;
+        ctx.save();
+        ctx.strokeStyle = withAlpha(color, alpha);
+        ctx.fillStyle = withAlpha(color, alpha * 0.13);
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, TAU);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([8, 10]);
+        ctx.lineDashOffset = -state.time * 38;
+        ctx.strokeStyle = withAlpha(color, alpha * 1.35);
+        ctx.beginPath();
+        ctx.arc(x, y, radius * 0.72 + Math.sin(state.time * 4) * 5, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function nearestNode(nodes, point) {
+        if (!nodes.length) return null;
+        return nodes.reduce((best, node) => (dist(node, point) < dist(best, point) ? node : best), nodes[0]);
+      }
+
+      function nearestPoint(points, target) {
+        if (!points.length) return null;
+        return points.reduce((best, point) => (dist(point, target) < dist(best, target) ? point : best), points[0]);
       }
 
       function drawGestureCue(key, t) {
