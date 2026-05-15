@@ -23,6 +23,7 @@ try {
   await waitForServer(BASE_URL);
   const browser = await chromium.launch({ headless: true });
   try {
+    await smokeStartFlow(browser);
     await smokeViewport(browser, { width: 1280, height: 720, name: "desktop" });
     await smokeViewport(browser, { width: 390, height: 844, name: "mobile" });
   } finally {
@@ -50,6 +51,9 @@ async function smokeViewport(browser, viewport) {
   }, null, { timeout: 15_000 });
   await page
     .waitForFunction(() => navigator.serviceWorker?.getRegistration("/").then(Boolean), null, { timeout: 6_000 })
+    .catch(() => undefined);
+  await page
+    .waitForFunction(() => Boolean(document.querySelector(".pixi-canvas")) && Boolean(document.querySelector("#riveLayer")), null, { timeout: 8_000 })
     .catch(() => undefined);
   await page.waitForTimeout(1_500);
 
@@ -103,14 +107,85 @@ async function smokeViewport(browser, viewport) {
   if (result.overflowing.length) {
     throw new Error(`${viewport.name} layout overflow: ${result.overflowing.join(", ")}`);
   }
-  const currentMessages = messages.filter((message) => {
+  const currentMessages = filterConsole(messages);
+  if (currentMessages.length) {
+    throw new Error(`${viewport.name} console noise:\n${currentMessages.join("\n")}`);
+  }
+}
+
+async function smokeStartFlow(browser) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const messages = [];
+  page.on("console", (message) => {
+    if (["error", "warning"].includes(message.type())) messages.push(`${message.type()}: ${message.text()}`);
+  });
+  page.on("pageerror", (error) => {
+    messages.push(`pageerror: ${error.message}`);
+  });
+
+  await page.goto(`${BASE_URL}/?smoke=start`, { waitUntil: "load" });
+  await page.waitForTimeout(3_000);
+  const before = await readStartFlow(page);
+  const startRect = await page.evaluate(() => {
+    const rect = document.querySelector("#startButton")?.getBoundingClientRect();
+    return rect ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height } : null;
+  });
+  if (!startRect) {
+    throw new Error(`start button missing before click: ${JSON.stringify(before)}`);
+  }
+  await page.mouse.click(startRect.x + startRect.width / 2, startRect.y + startRect.height / 2);
+  await page.waitForTimeout(1_500);
+  const after = await readStartFlow(page);
+  await page.close();
+
+  if (before.startOpen !== "true" || before.startHidden !== "false") {
+    throw new Error(`start overlay not open on first load: ${JSON.stringify(before)}`);
+  }
+  if (before.completeOpen !== "false" || before.completeHidden !== "true" || !before.completeInert) {
+    throw new Error(`complete overlay exposed on first load: ${JSON.stringify(before)}`);
+  }
+  if (after.started !== "true" || after.startOpen !== "false" || after.startHidden !== "true" || !after.startInert) {
+    throw new Error(`start action did not enter play cleanly: ${JSON.stringify(after)}`);
+  }
+  if (after.completeOpen !== "false" || after.completeHidden !== "true" || !after.completeInert) {
+    throw new Error(`complete overlay exposed during play: ${JSON.stringify(after)}`);
+  }
+  if (after.cameraBlocked === "true" && after.cameraStatus !== "classic controls") {
+    throw new Error(`blocked camera did not fall back clearly: ${JSON.stringify(after)}`);
+  }
+  const currentMessages = filterConsole(messages);
+  if (currentMessages.length) {
+    throw new Error(`start flow console noise:\n${currentMessages.join("\n")}`);
+  }
+}
+
+async function readStartFlow(page) {
+  return page.evaluate(() => {
+    const game = document.querySelector(".game");
+    const startOverlay = document.querySelector("#startOverlay");
+    const completeOverlay = document.querySelector("#completeOverlay");
+    return {
+      started: game?.dataset.started || "",
+      mode: game?.dataset.mode || "",
+      cameraBlocked: game?.dataset.cameraBlocked || "",
+      cameraStatus: document.querySelector("#cameraStatus")?.textContent?.trim() || "",
+      startText: document.querySelector("#startButtonText")?.textContent?.trim() || "",
+      startOpen: startOverlay?.dataset.open || "",
+      startHidden: startOverlay?.getAttribute("aria-hidden") || "",
+      startInert: Boolean(startOverlay?.hasAttribute("inert")),
+      completeOpen: completeOverlay?.dataset.open || "",
+      completeHidden: completeOverlay?.getAttribute("aria-hidden") || "",
+      completeInert: Boolean(completeOverlay?.hasAttribute("inert"))
+    };
+  });
+}
+
+function filterConsole(messages) {
+  return messages.filter((message) => {
     if (message.includes("Permissions-Policy")) return false;
     if (message.includes("GL Driver Message") && message.includes("GPU stall due to ReadPixels")) return false;
     return true;
   });
-  if (currentMessages.length) {
-    throw new Error(`${viewport.name} console noise:\n${currentMessages.join("\n")}`);
-  }
 }
 
 async function waitForServer(url) {

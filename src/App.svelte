@@ -61,12 +61,12 @@
       </div>
       <button class="start-button" id="startButton" type="button">
         <span id="playIcon"></span>
-        <span>Begin</span>
+        <span id="startButtonText">Begin</span>
       </button>
     </div>
   </section>
 
-  <section class="overlay" id="completeOverlay" aria-label="Game complete">
+  <section class="overlay" id="completeOverlay" aria-label="Game complete" aria-hidden="true" inert>
     <div class="start-panel">
       <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
         <circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-width="3" />

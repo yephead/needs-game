@@ -162,6 +162,7 @@ const SVG = {
       const startOverlay = document.getElementById("startOverlay");
       const completeOverlay = document.getElementById("completeOverlay");
       const startButton = document.getElementById("startButton");
+      const startButtonText = document.getElementById("startButtonText");
       const againButton = document.getElementById("againButton");
       const restartButton = document.getElementById("restartButton");
       const startStatus = document.getElementById("startStatus");
@@ -255,7 +256,7 @@ const SVG = {
         button.addEventListener("click", () => {
           if (index <= state.levelIndex && state.started && !state.transitioning) {
             state.complete = false;
-            completeOverlay.dataset.open = "false";
+            setOverlayOpen(completeOverlay, false);
             state.levelIndex = index;
             initLevel();
           }
@@ -301,6 +302,9 @@ const SVG = {
         startStatus.dataset.state = cameraSignal.state;
         startStatusIcon.innerHTML = state.camera.enabled ? SVG.cameraActive : SVG.camera;
         startStatusText.textContent = cameraSignal.text;
+        const startLabel = !state.started && state.camera.blocked ? "Begin classic" : "Begin";
+        startButtonText.textContent = startLabel;
+        startButton.setAttribute("aria-label", state.camera.blocked ? "Begin with classic controls" : "Begin");
         soundButton.setAttribute("aria-pressed", String(!state.muted));
         soundIcon.innerHTML = state.muted ? SVG.soundOff : SVG.soundOn;
         Array.from(rail.children).forEach((button, index) => {
@@ -320,7 +324,7 @@ const SVG = {
 
       function cameraStatusSignal() {
         if (state.camera.loading) return { state: "loading", text: state.camera.status || "camera permission" };
-        if (state.camera.blocked) return { state: "blocked", text: "allow camera" };
+        if (state.camera.blocked) return { state: "blocked", text: state.started ? "classic controls" : "allow camera" };
         if (state.camera.enabled) return { state: "active", text: state.camera.task === "pose" ? "full body" : "upper body" };
         if (state.camera.status) return { state: "blocked", text: state.camera.status };
         return { state: "idle", text: "" };
@@ -373,8 +377,16 @@ const SVG = {
         state.particles.length = 0;
         state.waves.length = 0;
         state.ripples.length = 0;
-        completeOverlay.dataset.open = "false";
+        setOverlayOpen(completeOverlay, false);
         initLevel();
+      }
+
+      function setOverlayOpen(overlay, open) {
+        overlay.dataset.open = String(open);
+        overlay.setAttribute("aria-hidden", String(!open));
+        if (open) overlay.removeAttribute("inert");
+        else overlay.setAttribute("inert", "");
+        overlay.inert = !open;
       }
 
       function initLevel() {
@@ -526,14 +538,18 @@ const SVG = {
 
       function startGame() {
         unlockAudio();
-        if (!state.camera.enabled && !state.camera.loading) {
+        const shouldAttemptCamera = !state.camera.enabled && !state.camera.loading && !state.camera.blocked;
+        if (shouldAttemptCamera) {
           state.mode = DEFAULT_MODE;
+        } else if (state.camera.blocked) {
+          state.mode = "classic";
+          setCameraStatus("classic controls");
         }
         state.started = true;
         state.complete = false;
-        startOverlay.dataset.open = "false";
+        setOverlayOpen(startOverlay, false);
         resetGame();
-        if (!state.camera.enabled && !state.camera.loading) {
+        if (shouldAttemptCamera) {
           startHandControl(DEFAULT_CAMERA_TASK, { fallbackMode: "classic" });
         }
       }
@@ -708,7 +724,7 @@ const SVG = {
         }
         if (fallbackMode === "classic") {
           state.mode = "classic";
-          setCameraStatus(status);
+          setCameraStatus(state.started && blocked ? "classic controls" : status);
           refreshStageCue();
         } else {
           setCameraStatus(status);
@@ -1328,14 +1344,10 @@ const SVG = {
         refreshStageCue();
         updateHud();
       }
-      cameraButton.addEventListener("pointerdown", requestCameraToggle);
       cameraButton.addEventListener("click", requestCameraToggle);
       cameraButton.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || isSpace(event)) requestCameraToggle(event);
       });
-      document.addEventListener("click", (event) => {
-        if (event.target && event.target.closest && event.target.closest("#cameraButton")) requestCameraToggle(event);
-      }, true);
       soundButton.addEventListener("click", () => {
         state.muted = !state.muted;
         soundEngine.setMuted(state.muted);
@@ -1879,7 +1891,7 @@ const SVG = {
       function finishGame() {
         state.complete = true;
         state.transitioning = false;
-        completeOverlay.dataset.open = "true";
+        setOverlayOpen(completeOverlay, true);
         state.progress = 1;
         updateHud();
       }
@@ -3265,8 +3277,8 @@ const SVG = {
         state.muted = true;
         state.started = true;
         state.mode = "classic";
-        startOverlay.dataset.open = "false";
-        completeOverlay.dataset.open = "false";
+        setOverlayOpen(startOverlay, false);
+        setOverlayOpen(completeOverlay, false);
         gameEl.dataset.verify = "running";
 
         try {
@@ -3292,7 +3304,7 @@ const SVG = {
           state.mode = modeBefore;
           state.started = startedBefore;
           resetGame();
-          startOverlay.dataset.open = startedBefore ? "false" : "true";
+          setOverlayOpen(startOverlay, !startedBefore);
           updateHud();
         }
       }
@@ -3430,6 +3442,8 @@ const SVG = {
       }
 
       resize();
+      setOverlayOpen(startOverlay, true);
+      setOverlayOpen(completeOverlay, false);
       initLevel();
       updateHud();
       loopRaf = requestAnimationFrame(loop);
