@@ -240,9 +240,21 @@ const SVG = {
           actionDown: false,
           confidence: 0,
           intent: null,
+          poseStable: null,
           session: 0
         },
         input: { left: false, right: false, up: false, down: false, space: false, just: false, pointerJust: false }
+      };
+
+      const POSE_STABLE_KEYS = ["armsOpen", "armsUp", "handsTogether", "crouch", "star", "shield", "point"];
+      const POSE_STABLE_PROFILE = {
+        armsOpen: { rise: 0.58, fall: 0.24, on: 0.54, off: 0.24 },
+        armsUp: { rise: 0.56, fall: 0.26, on: 0.54, off: 0.24 },
+        handsTogether: { rise: 0.62, fall: 0.24, on: 0.54, off: 0.22 },
+        crouch: { rise: 0.58, fall: 0.22, on: 0.54, off: 0.24 },
+        star: { rise: 0.7, fall: 0.22, on: 0.56, off: 0.24 },
+        shield: { rise: 0.66, fall: 0.22, on: 0.54, off: 0.22 },
+        point: { rise: 0.62, fall: 0.28, on: 0.56, off: 0.24 }
       };
 
       let lastCameraToggle = 0;
@@ -765,6 +777,7 @@ const SVG = {
         state.camera.pinched = false;
         state.camera.actionDown = false;
         state.camera.intent = null;
+        state.camera.poseStable = null;
         state.camera.confidence = 0;
         state.camera.lastVideoTime = -1;
         state.pointer.active = false;
@@ -835,6 +848,7 @@ const SVG = {
         const wrist = landmarks[0];
         if (!indexTip || !thumbTip || !wrist) return;
 
+        state.camera.poseStable = null;
         const intent = buildHandIntent(landmarks, recognition);
         const controlPoint = gestureControlPoint(intent);
         const x = clamp(controlPoint.x, 16, state.width - 16);
@@ -873,11 +887,12 @@ const SVG = {
       }
 
       function applyPoseInput(landmarks, worldLandmarks = []) {
-        const intent = buildPoseIntent(landmarks, worldLandmarks);
-        if (!intent) {
+        const rawIntent = buildPoseIntent(landmarks, worldLandmarks);
+        if (!rawIntent) {
           clearHandInput();
           return;
         }
+        const intent = stabilizePoseIntent(rawIntent);
 
         const controlPoint = gestureControlPoint(intent);
         const x = clamp(controlPoint.x, 16, state.width - 16);
@@ -937,6 +952,8 @@ const SVG = {
         state.camera.confidence = 0;
         state.camera.pinched = false;
         state.camera.actionDown = false;
+        if (state.camera.task === "pose") decayPoseStability(0.42);
+        else state.camera.poseStable = null;
         if (state.camera.enabled) state.pointer.active = false;
         if (state.camera.enabled) setCameraStatus(state.camera.task === "pose" ? "stand in frame" : "show one hand");
       }
@@ -1058,7 +1075,16 @@ const SVG = {
         const rightArmExtended = rightWristVisible && distance2d(rightWrist, rightShoulder) > shoulderWidth * 0.92;
         const leadIsRight = landmarkConfidence(rightWrist) >= landmarkConfidence(leftWrist);
         const leadWrist = leadIsRight ? rightWrist : leftWrist;
-        const leadExtended = (leadIsRight ? rightArmExtended : leftArmExtended) || distance2d(leadWrist, bodyCenter) > shoulderWidth * 1.08;
+        const trailWrist = leadIsRight ? leftWrist : rightWrist;
+        const leadReachDistance = distance2d(leadWrist, bodyCenter);
+        const trailReachDistance = distance2d(trailWrist, bodyCenter);
+        const leadLateralReach = Math.abs(leadWrist.x - bodyCenter.x);
+        const trailLateralReach = Math.abs(trailWrist.x - bodyCenter.x);
+        const oneSidedReach =
+          leadReachDistance - trailReachDistance > shoulderWidth * 0.22 ||
+          (leadLateralReach > shoulderWidth * 1.78 && leadLateralReach - trailLateralReach > shoulderWidth * 0.1) ||
+          (leadWrist.y < shoulderCenter.y + shoulderWidth * 0.08 && trailWrist.y > shoulderCenter.y + shoulderWidth * 0.28);
+        const leadExtended = ((leadIsRight ? rightArmExtended : leftArmExtended) || leadReachDistance > shoulderWidth * 1.08) && oneSidedReach;
         const oneArmUp =
           (leftWristVisible && leftWrist.y < leftShoulder.y + shoulderWidth * 0.04) ||
           (rightWristVisible && rightWrist.y < rightShoulder.y + shoulderWidth * 0.04);
@@ -1071,7 +1097,11 @@ const SVG = {
         const armsOpen =
           leftWristVisible &&
           rightWristVisible &&
+          leftArmExtended &&
+          rightArmExtended &&
           wristSpan > shoulderWidth * 1.36 &&
+          leftWrist.x < leftShoulder.x - shoulderWidth * 0.12 &&
+          rightWrist.x > rightShoulder.x + shoulderWidth * 0.12 &&
           leftWrist.y < hipCenter.y + shoulderWidth * 0.18 &&
           rightWrist.y < hipCenter.y + shoulderWidth * 0.18;
         const wideStance = leftAnkleVisible && rightAnkleVisible && ankleSpan > shoulderWidth * 1.05;
@@ -1180,6 +1210,110 @@ const SVG = {
             bodyCenter: centerScreen
           }
         };
+      }
+
+      function createPoseStability() {
+        const scores = {};
+        const active = {};
+        POSE_STABLE_KEYS.forEach((key) => {
+          scores[key] = 0;
+          active[key] = false;
+        });
+        return { scores, active };
+      }
+
+      function poseStableProfile(key) {
+        return POSE_STABLE_PROFILE[key] || { rise: 0.58, fall: 0.25, on: 0.54, off: 0.24 };
+      }
+
+      function stabilizePoseIntent(rawIntent) {
+        if (!rawIntent || rawIntent.source !== "pose") return rawIntent;
+
+        const stable = state.camera.poseStable || createPoseStability();
+        const nextScores = stable.scores;
+        const nextActive = stable.active;
+
+        POSE_STABLE_KEYS.forEach((key) => {
+          const profile = poseStableProfile(key);
+          const score = clamp((nextScores[key] || 0) + (rawIntent[key] ? profile.rise : -profile.fall), 0, 1);
+          const wasActive = Boolean(nextActive[key]);
+          nextScores[key] = score;
+          nextActive[key] = wasActive ? score >= profile.off : score >= profile.on;
+        });
+
+        const star = Boolean(nextActive.star);
+        const armsOpen = Boolean(nextActive.armsOpen || star);
+        const armsUp = Boolean(nextActive.armsUp);
+        const handsTogether = Boolean(nextActive.handsTogether);
+        const crouch = Boolean(nextActive.crouch);
+        const shield = Boolean(nextActive.shield || handsTogether);
+        const point = Boolean(nextActive.point);
+        const jump = Boolean(rawIntent.jump);
+        const open = armsOpen || star;
+        const fist = handsTogether || crouch || shield;
+        const energy = clamp(
+          rawIntent.energy + (star ? 0.14 : 0) + (armsUp ? 0.08 : 0) + (crouch ? 0.05 : 0),
+          0,
+          1.4
+        );
+        const spread = Math.max(rawIntent.spread, star ? 1 : armsOpen ? 0.82 : rawIntent.spread);
+        const openness = Math.max(rawIntent.openness, star ? 1 : armsOpen ? 0.78 : handsTogether ? 0.18 : rawIntent.openness);
+        const label = star
+          ? "Star"
+          : jump
+            ? "Jump"
+            : shield
+              ? "Shield"
+              : armsUp
+                ? "Arms_Up"
+                : crouch
+                  ? "Crouch"
+                  : handsTogether
+                    ? "Hands_Close"
+                    : armsOpen
+                      ? "Open_Body"
+                      : point
+                        ? "Reach"
+                        : "Body";
+
+        state.camera.poseStable = stable;
+        return {
+          ...rawIntent,
+          pinch: handsTogether,
+          open,
+          fist,
+          point,
+          victory: armsUp || jump,
+          love: armsOpen || star,
+          thumbUp: armsUp || rawIntent.thumbUp || jump,
+          thumbDown: crouch,
+          spread,
+          openness,
+          label,
+          shortLabel: label.replace(/_/g, " ").toLowerCase(),
+          armsOpen,
+          armsUp,
+          handsTogether,
+          crouch,
+          jump,
+          star,
+          shield,
+          energy,
+          stability: { ...nextScores }
+        };
+      }
+
+      function decayPoseStability(amount = 0.35) {
+        const stable = state.camera.poseStable;
+        if (!stable) return;
+        let alive = false;
+        POSE_STABLE_KEYS.forEach((key) => {
+          const profile = poseStableProfile(key);
+          stable.scores[key] = clamp((stable.scores[key] || 0) - amount, 0, 1);
+          stable.active[key] = stable.scores[key] >= profile.off;
+          if (stable.scores[key] > 0) alive = true;
+        });
+        state.camera.poseStable = alive ? stable : null;
       }
 
       function poseToScreen(point) {
@@ -3579,9 +3713,11 @@ const SVG = {
         const taskBefore = state.camera.task;
         const intentBefore = state.camera.intent;
         const baselineBefore = state.camera.bodyBaselineY;
+        const poseStableBefore = state.camera.poseStable;
         try {
           state.camera.enabled = true;
           verifyPoseIntentRecognition();
+          verifyPoseStability();
           verifyCameraGather("hands");
           verifyCameraGather("body");
           verifyCameraSafety();
@@ -3594,6 +3730,7 @@ const SVG = {
           state.camera.task = taskBefore;
           state.camera.intent = intentBefore;
           state.camera.bodyBaselineY = baselineBefore;
+          state.camera.poseStable = poseStableBefore;
           resetVerifiedControls();
         }
       }
@@ -3640,6 +3777,46 @@ const SVG = {
             }
           });
         });
+      }
+
+      function verifyPoseStability() {
+        const baselineBefore = state.camera.bodyBaselineY;
+        const stableBefore = state.camera.poseStable;
+        const intentBefore = state.camera.intent;
+        const stableIntent = (landmarks, baselineY = null) => {
+          state.camera.bodyBaselineY = baselineY;
+          const raw = buildPoseIntent(landmarks);
+          if (!raw) throw new Error("pose stability failed to build raw intent");
+          return stabilizePoseIntent(raw);
+        };
+
+        try {
+          state.camera.intent = null;
+          state.camera.poseStable = null;
+          let intent = stableIntent(makePoseLandmarks({ leftWrist: { x: 0.18, y: 0.5 }, rightWrist: { x: 0.82, y: 0.5 }, leftAnkle: null, rightAnkle: null }));
+          if (!intent.star || !intent.armsOpen) throw new Error("pose stability did not activate star");
+          intent = stableIntent(makePoseLandmarks({ leftWrist: { x: 0.42, y: 0.65 }, rightWrist: { x: 0.58, y: 0.65 } }));
+          if (!intent.star || !intent.armsOpen) throw new Error("pose stability dropped star on one noisy frame");
+          stableIntent(makePoseLandmarks({ leftWrist: { x: 0.42, y: 0.65 }, rightWrist: { x: 0.58, y: 0.65 } }));
+          intent = stableIntent(makePoseLandmarks({ leftWrist: { x: 0.42, y: 0.65 }, rightWrist: { x: 0.58, y: 0.65 } }));
+          if (intent.star || intent.armsOpen) throw new Error("pose stability did not release open pose");
+
+          state.camera.poseStable = null;
+          intent = stableIntent(makePoseLandmarks({ leftWrist: { x: 0.49, y: 0.5 }, rightWrist: { x: 0.51, y: 0.5 } }));
+          if (!intent.shield || !intent.handsTogether) throw new Error("pose stability did not activate shield");
+          intent = stableIntent(makePoseLandmarks({ leftWrist: { x: 0.49, y: 0.5, visibility: 0.05 }, rightWrist: { x: 0.51, y: 0.5 } }));
+          if (!intent.shield || !intent.handsTogether) throw new Error("pose stability dropped shield on landmark flicker");
+
+          state.camera.poseStable = null;
+          intent = stableIntent(makePoseLandmarks({ rightWrist: { x: 0.86, y: 0.5 }, leftWrist: { x: 0.46, y: 0.54 } }));
+          if (!intent.point || intent.star) throw new Error("pose stability reach should be point without star");
+          intent = stableIntent(makePoseLandmarks({ rightWrist: { x: 0.56, y: 0.65 }, leftWrist: { x: 0.44, y: 0.65 } }));
+          if (!intent.point) throw new Error("pose stability dropped reach on one noisy frame");
+        } finally {
+          state.camera.bodyBaselineY = baselineBefore;
+          state.camera.poseStable = stableBefore;
+          state.camera.intent = intentBefore;
+        }
       }
 
       function verifyCameraGather(mode) {
@@ -3865,6 +4042,7 @@ const SVG = {
         state.camera.intent = null;
         state.camera.hand = null;
         state.camera.body = null;
+        state.camera.poseStable = null;
       }
 
       function verifyIntro() {
