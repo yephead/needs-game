@@ -4,30 +4,37 @@ Minimal Maslow-inspired browser game with camera-first embodied play.
 
 ## Run
 
-Open `index.html` directly, or serve the folder locally:
+Install and run the Vite app:
 
 ```sh
-npm run serve
+npm install
+npm run dev
 ```
 
-Then visit `http://127.0.0.1:4173/`.
+Then visit the URL Vite prints, usually `http://127.0.0.1:5173/`.
 
-Run the static verification check:
+Run the production gate:
 
 ```sh
 npm run verify
 ```
 
-For a built-in completion smoke test, visit `http://127.0.0.1:4173/?verify=1` and inspect the `.game` element:
+For a built-in completion smoke test, visit `/?verify=1` on the dev or preview server and inspect the `.game` element:
 
 - `data-verify="pass"` means every level reached its completion transition through its real update path.
 - `data-verify-results` lists the tier-by-tier result.
 
 ## Architecture
 
-- `index.html`: semantic shell, overlays, and HUD controls.
-- `styles.css`: visual system, responsive HUD, camera preview/status surfaces.
-- `src/game.js`: game loop, level state machines, canvas renderer, audio/haptics, input adapters.
+- `index.html`: Vite entry, metadata, and structured game schema.
+- `src/App.svelte`: Svelte 5 shell for the HUD, overlays, camera surfaces, and render layers.
+- `src/game.ts`: game loop, level state machines, canvas renderer, MediaPipe input adapters, and orchestration glue.
+- `src/render/pixiLayer.ts`: lazy PixiJS GPU layer for aura fields, burst particles, rings, and transcendence energy.
+- `src/motion/theatreDirector.ts`: Theatre.js timeline director for level-up camera motion, pyramid unfolding, and final lift.
+- `src/audio/soundEngine.ts`: Tone.js generative motifs plus Howler UI transients.
+- `src/animation/riveBridge.ts`: Rive runtime bridge for authored `.riv` symbols, with a canvas fallback until `public/needs-symbols.riv` exists.
+
+The first app chunk stays small. PixiJS, Theatre.js, Rive, Tone.js, and Howler are loaded as capability chunks instead of being forced into the initial shell.
 
 Input is progressive, without an upfront chooser:
 

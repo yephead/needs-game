@@ -1,5 +1,10 @@
-(() => {
-  "use strict";
+// @ts-nocheck
+import { createRiveBridge } from "./animation/riveBridge";
+import { createSoundEngine } from "./audio/soundEngine";
+import { createTheatreDirector } from "./motion/theatreDirector";
+import { createPixiLayer } from "./render/pixiLayer";
+
+export function mountNeedsGame() {
 
 const SVG = {
         play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7Z"/></svg>',
@@ -168,8 +173,18 @@ const SVG = {
       const cameraStatus = document.getElementById("cameraStatus");
       const soundButton = document.getElementById("soundButton");
       const soundIcon = document.getElementById("soundIcon");
+      const pixiHost = document.getElementById("pixiLayer");
+      const riveCanvas = document.getElementById("riveLayer");
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       const verifyMode = new URLSearchParams(window.location.search).has("verify");
+      const soundEngine = createSoundEngine();
+      const director = createTheatreDirector({ reduceMotion });
+      const pixiLayer = createPixiLayer(pixiHost);
+      const riveBridge = createRiveBridge(riveCanvas);
+      let motionSnapshot = director.snapshot;
+      let loopRaf = 0;
+      let primeTimer = 0;
+      let verifyTimer = 0;
 
       document.getElementById("playIcon").innerHTML = SVG.play;
       document.getElementById("againIcon").innerHTML = SVG.restart;
@@ -229,7 +244,6 @@ const SVG = {
         input: { left: false, right: false, up: false, down: false, space: false, just: false, pointerJust: false }
       };
 
-      let audioCtx = null;
       let lastCameraToggle = 0;
 
       function iconButton(level, index) {
@@ -270,6 +284,8 @@ const SVG = {
         gameEl.dataset.camera = state.camera.task || "off";
         gameEl.dataset.cameraEnabled = String(state.camera.enabled);
         gameEl.dataset.cameraBlocked = String(state.camera.blocked);
+        pixiLayer.setPalette(level.color, level.color2);
+        riveBridge.setLevel(state.levelIndex, state.progress);
         levelName.title = level.full;
         const nextCameraAction = cameraActionLabel();
         cameraButton.setAttribute("aria-pressed", String(state.camera.enabled));
@@ -343,6 +359,8 @@ const SVG = {
         canvas.style.width = `${state.width}px`;
         canvas.style.height = `${state.height}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        pixiLayer.resize(state.width, state.height, dpr);
+        riveBridge.resize(state.width, state.height, dpr);
         state.player.x = state.player.x || state.width * 0.5;
         state.player.y = state.player.y || state.height * 0.58;
       }
@@ -522,29 +540,12 @@ const SVG = {
 
       function unlockAudio() {
         if (state.muted) return;
-        if (!audioCtx) {
-          const AudioCtor = window.AudioContext || window.webkitAudioContext;
-          if (!AudioCtor) return;
-          audioCtx = new AudioCtor();
-        }
-        if (audioCtx.state === "suspended") {
-          audioCtx.resume();
-        }
+        void soundEngine.unlock();
       }
 
       function tone(freq = 440, duration = 0.12, type = "sine", gain = 0.055) {
-        if (state.verifying || state.muted || !audioCtx) return;
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const amp = audioCtx.createGain();
-        osc.frequency.setValueAtTime(freq, now);
-        osc.type = type;
-        amp.gain.setValueAtTime(0, now);
-        amp.gain.linearRampToValueAtTime(gain, now + 0.012);
-        amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-        osc.connect(amp).connect(audioCtx.destination);
-        osc.start(now);
-        osc.stop(now + duration + 0.02);
+        if (state.verifying || state.muted) return;
+        soundEngine.tone(freq, duration, type, gain);
       }
 
       function buzz(pattern) {
@@ -553,12 +554,14 @@ const SVG = {
 
       function successTone(levelIndex, step = 0, duration = 0.12) {
         const motif = LEVELS[levelIndex].successMotif;
-        tone(motif[step % motif.length], duration, step % 2 ? "sine" : "triangle", 0.045);
+        if (state.verifying || state.muted) return;
+        soundEngine.success(motif, step, duration);
       }
 
       function failureTone(levelIndex, step = 0) {
         const motif = LEVELS[levelIndex].failureMotif;
-        tone(motif[step % motif.length], 0.09, "sawtooth", 0.025);
+        if (state.verifying || state.muted) return;
+        soundEngine.failure(motif, step);
       }
 
       async function startHandControl(task = desiredVisionTask(), options = {}) {
@@ -1335,6 +1338,7 @@ const SVG = {
       }, true);
       soundButton.addEventListener("click", () => {
         state.muted = !state.muted;
+        soundEngine.setMuted(state.muted);
         if (!state.muted) unlockAudio();
         updateHud();
       });
@@ -1382,11 +1386,16 @@ const SVG = {
         const dt = reduceMotion ? Math.min(rawDt, 0.02) : rawDt;
         state.last = now;
         state.time += dt;
+        motionSnapshot = director.update(now);
+        riveBridge.setLevel(state.levelIndex, state.progress);
         tick(dt);
         draw();
+        pixiLayer.update(dt, state, motionSnapshot);
+        const level = LEVELS[state.levelIndex] || LEVELS[LEVELS.length - 1];
+        riveBridge.drawFallback(now, { primary: level.color, secondary: level.color2 });
         state.input.just = false;
         state.input.pointerJust = false;
-        requestAnimationFrame(loop);
+        loopRaf = requestAnimationFrame(loop);
       }
 
       function tick(dt) {
@@ -1840,14 +1849,26 @@ const SVG = {
 
       function levelUp(kind) {
         if (state.transitioning) return;
+        const level = LEVELS[state.levelIndex];
         state.transitioning = true;
         state.transitionKind = kind;
         state.transitionTime = 0;
         state.progress = 1;
         state.shake = 1.2;
-        stageNote.textContent = LEVELS[state.levelIndex].completionMoment;
+        stageNote.textContent = level.completionMoment;
+        if (kind === "beyond") {
+          director.transcend();
+          soundEngine.transcend();
+          riveBridge.transcend();
+          pixiLayer.burst({ x: state.width * 0.5, y: state.height * 0.52, color: level.color2, count: 132, kind: "transcend" });
+        } else {
+          director.levelUp(level.key, state.levelIndex);
+          soundEngine.levelUp(level.successMotif, state.levelIndex);
+          riveBridge.pulse(state.levelIndex);
+          pixiLayer.burst({ x: state.width * 0.5, y: state.height * 0.52, color: level.color, count: 78, kind: "level" });
+        }
         for (let i = 0; i < 110; i++) {
-          spawnParticle(state.width * 0.5, state.height * 0.52, LEVELS[state.levelIndex].color, 1.2 + Math.random() * 1.9, true);
+          spawnParticle(state.width * 0.5, state.height * 0.52, level.color, 1.2 + Math.random() * 1.9, true);
         }
         successTone(state.levelIndex, 0, 0.16);
         setTimeout(() => successTone(state.levelIndex, 2, 0.18), 80);
@@ -1888,6 +1909,12 @@ const SVG = {
         const shakeY = (Math.random() - 0.5) * state.shake * 8;
         ctx.save();
         ctx.translate(shakeX, shakeY);
+        if (motionSnapshot.active || motionSnapshot.surge) {
+          ctx.translate(w * 0.5 + motionSnapshot.cameraX, h * 0.5 + motionSnapshot.cameraY);
+          ctx.rotate(motionSnapshot.rotate);
+          ctx.scale(motionSnapshot.zoom, motionSnapshot.zoom);
+          ctx.translate(-w * 0.5, -h * 0.5);
+        }
         drawAtmosphere();
 
         if (!state.started || state.complete) {
@@ -3026,6 +3053,7 @@ const SVG = {
 
       function burst(x, y, color, count) {
         for (let i = 0; i < count; i++) spawnParticle(x, y, color, 1, true);
+        pixiLayer.burst({ x, y, color, count: Math.max(8, Math.floor(count * 0.38)), kind: "hit" });
         spawnRipple(x, y, color, 80);
       }
 
@@ -3404,7 +3432,17 @@ const SVG = {
       resize();
       initLevel();
       updateHud();
-      requestAnimationFrame(loop);
-      if (!verifyMode) window.setTimeout(primeCamera, 360);
-      if (verifyMode) setTimeout(verifyGame, 60);
-})();
+      loopRaf = requestAnimationFrame(loop);
+      if (!verifyMode) primeTimer = window.setTimeout(primeCamera, 360);
+      if (verifyMode) verifyTimer = window.setTimeout(verifyGame, 60);
+
+      return () => {
+        if (loopRaf) window.cancelAnimationFrame(loopRaf);
+        if (primeTimer) window.clearTimeout(primeTimer);
+        if (verifyTimer) window.clearTimeout(verifyTimer);
+        stopHandControl({ skipUpdate: true });
+        soundEngine.dispose();
+        pixiLayer.destroy();
+        riveBridge.destroy();
+      };
+}

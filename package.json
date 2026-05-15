@@ -5,8 +5,11 @@
   "description": "A camera-first embodied Maslow browser game.",
   "type": "module",
   "scripts": {
-    "verify": "node --check src/game.js",
-    "serve": "python3 -m http.server 4173"
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "verify": "npm run typecheck && npm run build"
   },
   "keywords": [
     "game",
@@ -15,5 +18,21 @@
     "camera",
     "embodied"
   ],
-  "license": "UNLICENSED"
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@rive-app/canvas": "^2.37.6",
+    "@theatre/core": "^0.7.2",
+    "howler": "^2.2.4",
+    "pixi.js": "^8.18.1",
+    "tone": "^15.1.22"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/howler": "^2.2.12",
+    "svelte": "^5.55.7",
+    "svelte-check": "^4.4.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  }
 }
