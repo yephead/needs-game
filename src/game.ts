@@ -1048,40 +1048,40 @@ const SVG = {
         const hipCenter = midpoint([leftHip, rightHip]);
         const bodyCenter = midpoint([shoulderCenter, hipCenter]);
         const shoulderWidth = Math.max(0.055, distance2d(leftShoulder, rightShoulder));
-        const leftWristVisible = landmarkConfidence(leftWrist) > 0.24;
-        const rightWristVisible = landmarkConfidence(rightWrist) > 0.24;
-        const leftAnkleVisible = landmarkConfidence(leftAnkle) > 0.24;
-        const rightAnkleVisible = landmarkConfidence(rightAnkle) > 0.24;
+        const leftWristVisible = landmarkConfidence(leftWrist) > 0.18;
+        const rightWristVisible = landmarkConfidence(rightWrist) > 0.18;
+        const leftAnkleVisible = landmarkConfidence(leftAnkle) > 0.18;
+        const rightAnkleVisible = landmarkConfidence(rightAnkle) > 0.18;
         const wristSpan = distance2d(leftWrist, rightWrist);
         const ankleSpan = leftAnkle && rightAnkle ? distance2d(leftAnkle, rightAnkle) : 0;
-        const leftArmExtended = leftWristVisible && distance2d(leftWrist, leftShoulder) > shoulderWidth * 1.15;
-        const rightArmExtended = rightWristVisible && distance2d(rightWrist, rightShoulder) > shoulderWidth * 1.15;
+        const leftArmExtended = leftWristVisible && distance2d(leftWrist, leftShoulder) > shoulderWidth * 0.92;
+        const rightArmExtended = rightWristVisible && distance2d(rightWrist, rightShoulder) > shoulderWidth * 0.92;
         const leadIsRight = landmarkConfidence(rightWrist) >= landmarkConfidence(leftWrist);
         const leadWrist = leadIsRight ? rightWrist : leftWrist;
-        const leadExtended = leadIsRight ? rightArmExtended : leftArmExtended;
+        const leadExtended = (leadIsRight ? rightArmExtended : leftArmExtended) || distance2d(leadWrist, bodyCenter) > shoulderWidth * 1.08;
         const oneArmUp =
-          (leftWristVisible && leftWrist.y < leftShoulder.y - shoulderWidth * 0.12) ||
-          (rightWristVisible && rightWrist.y < rightShoulder.y - shoulderWidth * 0.12);
+          (leftWristVisible && leftWrist.y < leftShoulder.y + shoulderWidth * 0.04) ||
+          (rightWristVisible && rightWrist.y < rightShoulder.y + shoulderWidth * 0.04);
         const bothArmsUp =
           leftWristVisible &&
           rightWristVisible &&
-          leftWrist.y < leftShoulder.y - shoulderWidth * 0.1 &&
-          rightWrist.y < rightShoulder.y - shoulderWidth * 0.1;
-        const handsTogether = leftWristVisible && rightWristVisible && wristSpan < shoulderWidth * 0.72;
+          leftWrist.y < leftShoulder.y + shoulderWidth * 0.06 &&
+          rightWrist.y < rightShoulder.y + shoulderWidth * 0.06;
+        const handsTogether = leftWristVisible && rightWristVisible && wristSpan < shoulderWidth * 0.88;
         const armsOpen =
           leftWristVisible &&
           rightWristVisible &&
-          wristSpan > shoulderWidth * 1.75 &&
-          leftWrist.y < hipCenter.y &&
-          rightWrist.y < hipCenter.y;
-        const wideStance = leftAnkleVisible && rightAnkleVisible && ankleSpan > shoulderWidth * 1.28;
+          wristSpan > shoulderWidth * 1.36 &&
+          leftWrist.y < hipCenter.y + shoulderWidth * 0.18 &&
+          rightWrist.y < hipCenter.y + shoulderWidth * 0.18;
+        const wideStance = leftAnkleVisible && rightAnkleVisible && ankleSpan > shoulderWidth * 1.05;
         const wristCenter = midpoint([leftWrist, rightWrist]);
         const crossedArms =
           leftWristVisible &&
           rightWristVisible &&
-          (distance2d(leftWrist, rightShoulder) < shoulderWidth * 0.88 || distance2d(rightWrist, leftShoulder) < shoulderWidth * 0.88) &&
-          wristCenter.y < hipCenter.y;
-        const shield = crossedArms || (handsTogether && wristCenter.y < hipCenter.y);
+          (distance2d(leftWrist, rightShoulder) < shoulderWidth * 1.06 || distance2d(rightWrist, leftShoulder) < shoulderWidth * 1.06) &&
+          wristCenter.y < hipCenter.y + shoulderWidth * 0.16;
+        const shield = crossedArms || (handsTogether && wristCenter.y < hipCenter.y + shoulderWidth * 0.18);
         const kneeCenter = leftKnee && rightKnee ? midpoint([leftKnee, rightKnee]) : null;
         const legCompression = kneeCenter ? (kneeCenter.y - hipCenter.y) / shoulderWidth : 2;
         if (state.camera.bodyBaselineY == null) {
@@ -1090,8 +1090,8 @@ const SVG = {
           state.camera.bodyBaselineY = Math.min(hipCenter.y, state.camera.bodyBaselineY + 0.0008);
         }
         const hipDrop = hipCenter.y - state.camera.bodyBaselineY;
-        const crouch = hipDrop > shoulderWidth * 0.14 || legCompression < 0.82;
-        const star = armsOpen && wideStance;
+        const crouch = hipDrop > shoulderWidth * 0.1 || legCompression < 1.05;
+        const star = armsOpen && (wideStance || bothArmsUp || wristSpan > shoulderWidth * 2.08);
         const centerScreen = poseToScreen(bodyCenter);
         const leadScreen = poseToScreen(leadWrist);
         const previous = state.camera.intent && state.camera.intent.source === "pose" ? state.camera.intent : null;
@@ -1100,8 +1100,8 @@ const SVG = {
         const velocity = Math.hypot(vx, vy);
         const jump = Boolean(previous && previous.centerY - centerScreen.y > 18) || (oneArmUp && -vy > 12);
         const lean = nose ? clamp((nose.x - hipCenter.x) / shoulderWidth, -1.8, 1.8) : 0;
-        const spread = clamp((wristSpan / shoulderWidth - 0.55) / 1.75, 0, 1);
-        const openness = clamp((armsOpen ? 0.58 : 0) + (wideStance ? 0.22 : 0) + (oneArmUp ? 0.2 : 0), 0, 1);
+        const spread = clamp((wristSpan / shoulderWidth - 0.48) / 1.62, 0, 1);
+        const openness = clamp((armsOpen ? 0.58 : 0) + (wideStance ? 0.22 : 0) + (oneArmUp ? 0.2 : 0) + (wristSpan > shoulderWidth * 2.08 ? 0.14 : 0), 0, 1);
         const fit = {
           width: boxWidth,
           height: boxHeight,
@@ -3578,8 +3578,10 @@ const SVG = {
         const enabledBefore = state.camera.enabled;
         const taskBefore = state.camera.task;
         const intentBefore = state.camera.intent;
+        const baselineBefore = state.camera.bodyBaselineY;
         try {
           state.camera.enabled = true;
+          verifyPoseIntentRecognition();
           verifyCameraGather("hands");
           verifyCameraGather("body");
           verifyCameraSafety();
@@ -3591,8 +3593,53 @@ const SVG = {
           state.camera.enabled = enabledBefore;
           state.camera.task = taskBefore;
           state.camera.intent = intentBefore;
+          state.camera.bodyBaselineY = baselineBefore;
           resetVerifiedControls();
         }
+      }
+
+      function verifyPoseIntentRecognition() {
+        const checks = [
+          {
+            name: "wide-arm star",
+            landmarks: makePoseLandmarks({ leftWrist: { x: 0.18, y: 0.5 }, rightWrist: { x: 0.82, y: 0.5 }, leftAnkle: null, rightAnkle: null }),
+            expect: { armsOpen: true, star: true, open: true }
+          },
+          {
+            name: "single-arm reach",
+            landmarks: makePoseLandmarks({ rightWrist: { x: 0.86, y: 0.5 }, leftWrist: { x: 0.46, y: 0.54 } }),
+            expect: { point: true }
+          },
+          {
+            name: "hands-close shield",
+            landmarks: makePoseLandmarks({ leftWrist: { x: 0.49, y: 0.5 }, rightWrist: { x: 0.51, y: 0.5 } }),
+            expect: { handsTogether: true, shield: true, pinch: true }
+          },
+          {
+            name: "hip-drop crouch",
+            landmarks: makePoseLandmarks({
+              leftHip: { x: 0.45, y: 0.67 },
+              rightHip: { x: 0.55, y: 0.67 },
+              leftKnee: { x: 0.46, y: 0.74 },
+              rightKnee: { x: 0.54, y: 0.74 }
+            }),
+            baselineY: 0.58,
+            expect: { crouch: true, thumbDown: true }
+          }
+        ];
+
+        checks.forEach((check) => {
+          const baselineBefore = state.camera.bodyBaselineY;
+          state.camera.bodyBaselineY = check.baselineY ?? null;
+          const intent = buildPoseIntent(check.landmarks);
+          state.camera.bodyBaselineY = baselineBefore;
+          if (!intent) throw new Error(`pose recognition failed: ${check.name}`);
+          Object.entries(check.expect).forEach(([key, expected]) => {
+            if (intent[key] !== expected) {
+              throw new Error(`pose recognition ${check.name} expected ${key}=${expected}`);
+            }
+          });
+        });
       }
 
       function verifyCameraGather(mode) {
@@ -3772,6 +3819,35 @@ const SVG = {
           },
           ...overrides
         };
+      }
+
+      function makePoseLandmarks(overrides = {}) {
+        const point = (name, x, y, visibility = 1) => {
+          if (overrides[name] === null) return null;
+          const next = overrides[name] || {};
+          return {
+            x: next.x ?? x,
+            y: next.y ?? y,
+            z: next.z ?? 0,
+            visibility: next.visibility ?? visibility,
+            presence: next.presence ?? visibility
+          };
+        };
+        const landmarks = Array.from({ length: 33 }, () => null);
+        landmarks[0] = point("nose", 0.5, 0.28);
+        landmarks[11] = point("leftShoulder", 0.43, 0.38);
+        landmarks[12] = point("rightShoulder", 0.57, 0.38);
+        landmarks[13] = point("leftElbow", 0.38, 0.48);
+        landmarks[14] = point("rightElbow", 0.62, 0.48);
+        landmarks[15] = point("leftWrist", 0.34, 0.52);
+        landmarks[16] = point("rightWrist", 0.66, 0.52);
+        landmarks[23] = point("leftHip", 0.45, 0.62);
+        landmarks[24] = point("rightHip", 0.55, 0.62);
+        landmarks[25] = point("leftKnee", 0.46, 0.79);
+        landmarks[26] = point("rightKnee", 0.54, 0.79);
+        landmarks[27] = point("leftAnkle", 0.44, 0.94);
+        landmarks[28] = point("rightAnkle", 0.56, 0.94);
+        return landmarks;
       }
 
       function resetVerifiedControls() {
