@@ -125,12 +125,12 @@ const SVG = {
 
       const BODY_CUES = {
         intro: "Breathe: open / close",
-        body: "Gather: crouch / star",
-        safety: "Seal: shield / open",
+        body: "Gather: open hand / crouch-star",
+        safety: "Seal: palm shield / body shield",
         love: "Thread: arm span",
         esteem: "Time: jump / arms up",
         actual: "Trace: reach",
-        beyond: "Release: star / jump"
+        beyond: "Release: sign / star pulses"
       };
       const CLASSIC_CUE = "pointer / arrows / space";
       const DEFAULT_MODE = "hands";
@@ -465,6 +465,7 @@ const SVG = {
           state.levelState.flash = 0;
           state.levelState.lock = 0;
           state.levelState.bodyLiftLock = false;
+          state.levelState.bodyStrikeCooldown = 0;
         }
 
         if (key === "actual") {
@@ -508,6 +509,7 @@ const SVG = {
           state.levelState.lastTap = null;
           state.levelState.echoes = [];
           state.levelState.beams = [];
+          state.levelState.pulseCooldown = 0;
         }
 
         updateHud();
@@ -911,6 +913,7 @@ const SVG = {
           crouch: intent.crouch,
           armsOpen: intent.armsOpen,
           armsUp: intent.armsUp,
+          handsTogether: intent.handsTogether,
           shield: intent.shield,
           energy: intent.energy,
           spread: intent.spread,
@@ -1201,6 +1204,15 @@ const SVG = {
 
       function isGestureActionDown(intent) {
         const key = LEVELS[state.levelIndex].key;
+        if (intent.source === "pose") {
+          if (key === "intro") return intent.armsOpen || intent.star || intent.armsUp || intent.handsTogether || intent.crouch;
+          if (key === "body") return intent.crouch || intent.star || intent.armsOpen || intent.jump || intent.handsTogether;
+          if (key === "safety") return intent.shield || intent.armsOpen || intent.handsTogether || intent.crouch;
+          if (key === "love") return intent.armsOpen || intent.handsTogether || intent.star;
+          if (key === "esteem") return intent.jump || intent.armsUp || intent.thumbUp || intent.energy > 0.76;
+          if (key === "actual") return intent.point || intent.armsOpen || intent.armsUp || intent.star;
+          if (key === "beyond") return intent.star || intent.jump || intent.armsUp || intent.armsOpen || intent.handsTogether || intent.energy > 0.72;
+        }
         if (key === "intro") return intent.open || intent.pinch || intent.victory || intent.thumbUp;
         if (key === "body") return intent.fist || intent.pinch || intent.open;
         if (key === "safety") return intent.open || intent.fist;
@@ -1221,6 +1233,7 @@ const SVG = {
 
       function gestureControlPoint(intent) {
         const key = LEVELS[state.levelIndex].key;
+        if (intent.source === "pose" && (key === "body" || key === "safety" || key === "beyond")) return { x: intent.centerX, y: intent.centerY };
         if (key === "safety" || key === "body") return { x: intent.palmX, y: intent.palmY };
         if (key === "beyond" && intent.open) return { x: intent.palmX, y: intent.palmY };
         return { x: intent.x, y: intent.y };
@@ -1459,10 +1472,21 @@ const SVG = {
         updatePlayer(dt, false);
         const held = state.pointer.active || state.input.space;
         const l = state.levelState;
+        const intent = state.camera.intent;
+        const inhaleSignal = intent && intent.source === "pose"
+          ? intent.armsOpen || intent.star || intent.armsUp
+          : intent && intent.source === "hand"
+            ? intent.open || intent.love || intent.victory || intent.thumbUp
+            : held;
+        const exhaleSignal = intent && intent.source === "pose"
+          ? intent.handsTogether || intent.shield || intent.crouch || (!intent.armsOpen && !intent.armsUp && !intent.star)
+          : intent && intent.source === "hand"
+            ? intent.fist || intent.pinch || (!intent.open && !intent.love)
+            : !held;
         l.lastPhase = l.phase;
         l.phase = (l.phase + dt * INTRO_PHASE_SPEED) % 1;
         const inhaling = l.phase < 0.54;
-        const correct = inhaling ? held : !held;
+        const correct = inhaling ? inhaleSignal : exhaleSignal;
         const justLooped = l.phase < l.lastPhase;
         if (justLooped && !l.cycleAwarded) {
           l.ready = false;
@@ -1476,19 +1500,19 @@ const SVG = {
         l.helpPulse += dt * 2.2;
 
         if (inhaling) {
-          stageNote.textContent = state.mode === "body" ? "Breathe: open as ring opens" : "Breathe: hold as the ring opens";
-          l.inhaleCharge = clamp(l.inhaleCharge + dt * (held ? 1.62 : -0.16), 0, 1);
+          stageNote.textContent = state.mode === "body" ? "Breathe: open as ring opens" : state.mode === "hands" ? "Breathe: open hand" : "Breathe: hold as the ring opens";
+          l.inhaleCharge = clamp(l.inhaleCharge + dt * (inhaleSignal ? 1.62 : -0.16), 0, 1);
           l.exhaleCharge = Math.max(0, l.exhaleCharge - dt * 0.4);
-          if (state.input.just && held) {
+          if (state.input.just && inhaleSignal) {
             l.inhaleCharge = clamp(l.inhaleCharge + 0.28, 0, 1);
             spawnRipple(state.width * 0.5, state.height * 0.54, LEVELS[0].color, 92);
           }
           if (l.inhaleCharge >= 0.5) l.ready = true;
-          if (!held && l.phase > 0.18 && Math.random() < dt * 5) l.missGlow = Math.max(l.missGlow, 0.35);
+          if (!inhaleSignal && l.phase > 0.18 && Math.random() < dt * 5) l.missGlow = Math.max(l.missGlow, 0.35);
         } else {
-          stageNote.textContent = state.mode === "body" ? "Breathe: close as ring settles" : "Breathe: release as the ring settles";
-          if (l.ready) l.exhaleCharge = clamp(l.exhaleCharge + dt * (!held ? 1.75 : -0.24), 0, 1);
-          if (held && l.ready && Math.random() < dt * 5) l.missGlow = Math.max(l.missGlow, 0.35);
+          stageNote.textContent = state.mode === "body" ? "Breathe: close as ring settles" : state.mode === "hands" ? "Breathe: close hand" : "Breathe: release as the ring settles";
+          if (l.ready) l.exhaleCharge = clamp(l.exhaleCharge + dt * (exhaleSignal ? 1.75 : -0.24), 0, 1);
+          if (!exhaleSignal && l.ready && Math.random() < dt * 5) l.missGlow = Math.max(l.missGlow, 0.35);
         }
 
         if (l.ready && !l.cycleAwarded && l.exhaleCharge >= 0.48) {
@@ -1516,8 +1540,24 @@ const SVG = {
         updatePlayer(dt, true);
         const l = state.levelState;
         const intent = state.camera.intent;
-        const handGather = intent && (intent.open || intent.fist || intent.pinch);
-        const fullBodyGather = intent && intent.source === "pose" ? (intent.star ? 150 : intent.jump ? 118 : intent.crouch ? 96 : intent.armsOpen ? 84 : 0) : 0;
+        const handGather = intent && intent.source === "hand" && (intent.open || intent.fist || intent.pinch || intent.love);
+        const bodyGather = intent && intent.source === "pose" && (intent.star || intent.crouch || intent.armsOpen || intent.jump || intent.handsTogether);
+        const gatherOrigin = bodyGather
+          ? { x: intent.centerX, y: intent.centerY }
+          : handGather
+            ? { x: intent.palmX, y: intent.palmY }
+            : state.player;
+        const gatherRange = bodyGather
+          ? intent.star ? 460 : intent.jump ? 390 : intent.crouch ? 330 : intent.armsOpen ? 300 : 250
+          : handGather
+            ? 190 + intent.spread * 95 + (intent.pinch || intent.fist ? 38 : 0)
+            : 0;
+        const collectRange = bodyGather
+          ? intent.star ? 210 : intent.jump ? 160 : intent.crouch ? 132 : 118
+          : handGather
+            ? 62 + intent.spread * 36 + (intent.pinch || intent.fist ? 32 : 0)
+            : 0;
+        const fullBodyGather = bodyGather ? gatherRange * 0.38 : 0;
         const starSurge = intent && intent.source === "pose" && intent.star && !l.starLock;
         const crouchSurge = intent && intent.source === "pose" && intent.crouch && !l.crouchLock;
         if (starSurge || crouchSurge) {
@@ -1539,16 +1579,23 @@ const SVG = {
           item.phase += dt;
           item.pull = Math.max(0, item.pull - dt * 1.8);
           const d = dist(item, state.player);
-          const magnetRange = 128 + l.combo * 12 + (handGather ? 72 + intent.spread * 52 : 0) + fullBodyGather;
-          if (d < magnetRange || item.pull > 0) {
-            const strength = (item.pull > 0 ? 135 : handGather ? 96 : 46) * Math.max(0.2, 1 - d / magnetRange);
+          const gatherDistance = gatherRange > 0 ? dist(item, gatherOrigin) : Infinity;
+          const magnetRange = 128 + l.combo * 12 + (handGather ? 94 + intent.spread * 60 : 0) + fullBodyGather;
+          if (gatherDistance < gatherRange) {
+            const strength = (bodyGather ? 250 : 180) * Math.max(0.28, 1 - gatherDistance / Math.max(1, gatherRange));
+            item.x += ((gatherOrigin.x - item.x) / Math.max(1, gatherDistance)) * strength * dt;
+            item.y += ((gatherOrigin.y - item.y) / Math.max(1, gatherDistance)) * strength * dt;
+            item.pull = Math.max(item.pull, bodyGather ? 0.7 : 0.45);
+          } else if (d < magnetRange || item.pull > 0) {
+            const strength = (item.pull > 0 ? 135 : handGather ? 112 : 46) * Math.max(0.2, 1 - d / magnetRange);
             item.x += ((state.player.x - item.x) / Math.max(1, d)) * strength * dt;
             item.y += ((state.player.y - item.y) / Math.max(1, d)) * strength * dt;
           } else {
             item.x += Math.cos(item.phase * 1.7 + item.kind) * dt * 12;
             item.y += Math.sin(item.phase * 1.3 + item.kind) * dt * 10;
           }
-          const hit = dist(item, state.player) < item.r + state.player.r;
+          const directHit = collectRange > 0 && dist(item, gatherOrigin) < item.r + collectRange;
+          const hit = directHit || dist(item, state.player) < item.r + state.player.r;
           if (hit) {
             item.collected = true;
             l.collected += 1;
@@ -1557,9 +1604,10 @@ const SVG = {
             l.chainPulse = 1;
             state.progress = l.collected / l.items.length;
             l.items.forEach((other) => {
-              if (!other.collected && dist(other, item) < 92 + l.combo * 18 + (handGather ? 56 : 0) + fullBodyGather * 0.35) other.pull = 1;
+              if (!other.collected && dist(other, item) < 92 + l.combo * 18 + (handGather ? 70 : 0) + fullBodyGather * 0.45) other.pull = 1;
             });
-            burst(item.x, item.y, LEVELS[1].color, 18 + l.combo * 6);
+            burst(directHit ? gatherOrigin.x : item.x, directHit ? gatherOrigin.y : item.y, LEVELS[1].color, 18 + l.combo * 6);
+            spawnRipple(directHit ? gatherOrigin.x : item.x, directHit ? gatherOrigin.y : item.y, bodyGather ? LEVELS[1].color2 : LEVELS[1].color, bodyGather ? 96 : 62);
             successTone(1, l.combo);
             buzz(8);
           }
@@ -1575,8 +1623,19 @@ const SVG = {
         l.dangerFlash = Math.max(0, l.dangerFlash - dt * 2.8);
         l.bodySealPulse = Math.max(0, l.bodySealPulse - dt * 2.5);
         const intent = state.camera.intent;
-        const bodyShielding = intent && intent.source === "pose" && (intent.shield || intent.armsOpen || intent.fist);
-        const shielding = intent && (intent.open || intent.fist || intent.shield);
+        const bodyShielding = intent && intent.source === "pose" && (intent.shield || intent.armsOpen || intent.handsTogether || intent.crouch);
+        const handShielding = intent && intent.source === "hand" && (intent.open || intent.fist || intent.pinch);
+        const shielding = bodyShielding || handShielding || (intent && (intent.open || intent.fist || intent.shield));
+        const sealOrigin = bodyShielding && intent
+          ? { x: intent.centerX, y: intent.centerY }
+          : handShielding && intent
+            ? { x: intent.palmX, y: intent.palmY }
+            : state.player;
+        const sealRadius = bodyShielding && intent
+          ? 150 + intent.spread * 124 + (intent.armsOpen ? 46 : 0)
+          : handShielding && intent
+            ? 96 + intent.spread * 72 + (intent.pinch || intent.fist ? 26 : 0)
+            : 34;
         const sweepAngle = l.hazard;
         const cx = state.width * 0.5;
         const cy = state.height * 0.52;
@@ -1587,8 +1646,8 @@ const SVG = {
           if (shielding) {
             state.shake = Math.max(state.shake, 0.35);
             l.dangerFlash = 0.35;
-            l.bodySealPulse = bodyShielding ? 1 : l.bodySealPulse;
-            spawnRipple(state.player.x, state.player.y, LEVELS[2].color, 160);
+            l.bodySealPulse = bodyShielding ? 1 : Math.max(l.bodySealPulse, 0.58);
+            spawnRipple(sealOrigin.x, sealOrigin.y, LEVELS[2].color, bodyShielding ? 210 : 150);
             successTone(2, l.sealed + 1, 0.08);
           } else {
             state.shake = Math.max(state.shake, 1);
@@ -1608,14 +1667,13 @@ const SVG = {
           }
         }
         l.nodes.forEach((node) => {
-          const sealOrigin = bodyShielding && intent ? { x: intent.centerX, y: intent.centerY } : state.player;
-          const sealRadius = bodyShielding ? 76 + intent.spread * 42 : 34;
           if (!node.active && dist(node, sealOrigin) < sealRadius) {
             node.active = true;
             l.sealed += 1;
-            l.bodySealPulse = bodyShielding ? 1 : l.bodySealPulse;
+            l.bodySealPulse = bodyShielding ? 1 : Math.max(l.bodySealPulse, handShielding ? 0.52 : 0);
             state.progress = l.sealed / l.nodes.length;
             burst(node.x, node.y, LEVELS[2].color, 26);
+            spawnRipple(node.x, node.y, LEVELS[2].color2, bodyShielding ? 112 : 76);
             successTone(2, l.sealed);
             buzz(12);
           }
@@ -1627,8 +1685,14 @@ const SVG = {
         updatePlayer(dt, true);
         const l = state.levelState;
         const intent = state.camera.intent;
-        const drawing = state.pointer.active || state.input.space || Boolean(intent && (intent.love || intent.open));
-        const snapRange = intent && intent.love ? 118 : intent && intent.open ? 96 : 82;
+        const poseThreading = intent && intent.source === "pose" && (intent.armsOpen || intent.handsTogether || intent.star || intent.love);
+        const handThreading = intent && intent.source === "hand" && (intent.love || intent.open || intent.pinch);
+        const drawing = state.pointer.active || state.input.space || Boolean(poseThreading || handThreading);
+        const snapRange = poseThreading && intent
+          ? 138 + intent.spread * 92 + (intent.star ? 60 : 0)
+          : handThreading && intent
+            ? 112 + intent.spread * 58 + (intent.love ? 34 : 0)
+            : 82;
         l.snap = l.snap && l.snap.life > 0 ? { ...l.snap, life: l.snap.life - dt * 2.8 } : null;
         if (drawing) {
           l.thread.push({ x: state.player.x, y: state.player.y, life: 1 });
@@ -1652,13 +1716,15 @@ const SVG = {
             }
           }
         });
-        if (intent && intent.source === "pose" && intent.pose && intent.pose.leftWrist && intent.pose.rightWrist && (intent.armsOpen || intent.love)) {
+        if (poseThreading && intent.pose && intent.pose.leftWrist && intent.pose.rightWrist) {
           l.nodes.forEach((node) => {
             if (node.linked) return;
             const d = distanceToSegment(node, intent.pose.leftWrist, intent.pose.rightWrist);
-            if (d < 58 && d < snapDistance) {
+            const wristD = Math.min(dist(node, intent.pose.leftWrist), dist(node, intent.pose.rightWrist), dist(node, { x: intent.centerX, y: intent.centerY }));
+            const bodyThreadDistance = Math.min(d, wristD);
+            if (bodyThreadDistance < 118 + intent.spread * 62 && bodyThreadDistance < snapDistance) {
               snapCandidate = node;
-              snapDistance = d;
+              snapDistance = bodyThreadDistance;
             }
           });
         }
@@ -1684,29 +1750,33 @@ const SVG = {
         l.angle += dt * (1.48 + l.hits * 0.18 + Math.sin(state.time * 1.35) * 0.16);
         l.flash = Math.max(0, l.flash - dt * 3);
         l.lock = Math.max(0, l.lock - dt * 2.6);
+        l.bodyStrikeCooldown = Math.max(0, l.bodyStrikeCooldown - dt);
         const intent = state.camera.intent;
         if (intent && intent.thumbDown) {
           l.angle -= dt * 0.55;
         }
         const bodyLift = intent && intent.source === "pose" && (intent.jump || intent.armsUp || intent.energy > 0.82);
+        if (bodyLift) l.angle -= dt * (intent.armsUp ? 0.28 : 0.16);
         const bodyLiftTrigger = bodyLift && !l.bodyLiftLock;
+        const bodyAutoStrike = bodyLift && l.bodyStrikeCooldown <= 0 && Math.abs(angleDelta(l.angle, l.target)) < 0.56;
         if (!bodyLift) l.bodyLiftLock = false;
         if (bodyLiftTrigger) l.bodyLiftLock = true;
-        if (state.input.just || bodyLiftTrigger) {
+        if (state.input.just || bodyLiftTrigger || bodyAutoStrike) {
           const diff = Math.abs(angleDelta(l.angle, l.target));
           const handPrecision = intent && (intent.thumbUp || intent.victory);
-          const bodyPrecision = bodyLiftTrigger ? 0.44 + clamp(intent.energy, 0, 1) * 0.08 : 0;
-          if (diff < (bodyLiftTrigger ? bodyPrecision : handPrecision ? 0.36 : 0.27)) {
+          const bodyPrecision = bodyLift ? 0.5 + clamp(intent.energy, 0, 1) * 0.1 : 0;
+          if (diff < (bodyLift ? bodyPrecision : handPrecision ? 0.36 : 0.27)) {
             const hitTarget = l.target;
             l.hits += 1;
             l.flash = 1;
             l.lock = 1;
+            l.bodyStrikeCooldown = bodyLift ? 0.62 : l.bodyStrikeCooldown;
             state.progress = l.hits / 6;
             burst(state.width * 0.5 + Math.cos(hitTarget) * 118, state.height * 0.52 + Math.sin(hitTarget) * 118, LEVELS[4].color, 34);
             successTone(4, l.hits, 0.12);
             if (l.hits < 6) l.target = l.targets[l.hits];
             buzz(15);
-          } else {
+          } else if (!bodyAutoStrike) {
             state.shake = Math.max(state.shake, 0.5);
             failureTone(4);
           }
@@ -1726,15 +1796,24 @@ const SVG = {
         if (target) {
           const d = dist(target, state.player);
           const intent = state.camera.intent;
-          const tracing = intent && (intent.point || intent.open || intent.pinch);
-          const bodyReach = intent && intent.source === "pose" && intent.point && dist(target, { x: intent.x, y: intent.y }) < 70;
-          const range = tracing ? (intent && intent.source === "pose" ? 184 : 152) : 115;
+          const tracing = intent && (intent.point || intent.open || intent.pinch || intent.armsOpen || intent.armsUp || intent.star);
+          const handReach = intent && intent.source === "hand" && tracing && dist(target, { x: intent.x, y: intent.y }) < (intent.point ? 122 : 96);
+          const bodyReachDistance = intent && intent.source === "pose" && intent.pose
+            ? Math.min(
+              dist(target, { x: intent.x, y: intent.y }),
+              intent.pose.leftWrist ? dist(target, intent.pose.leftWrist) : Infinity,
+              intent.pose.rightWrist ? dist(target, intent.pose.rightWrist) : Infinity,
+              dist(target, { x: intent.centerX, y: intent.centerY })
+            )
+            : Infinity;
+          const bodyReach = intent && intent.source === "pose" && tracing && bodyReachDistance < (intent.star || intent.armsUp ? 172 : 132);
+          const range = tracing ? (intent && intent.source === "pose" ? 220 : 166) : 115;
           if (d < range) {
             const pull = (1 - d / range) * (tracing ? 92 : 60);
             state.player.vx += ((target.x - state.player.x) / Math.max(1, d)) * pull * dt;
             state.player.vy += ((target.y - state.player.y) / Math.max(1, d)) * pull * dt;
           }
-          if (bodyReach) {
+          if (bodyReach || handReach) {
             reachedTarget = true;
             state.player.vx += (target.x - state.player.x) * dt * 7;
             state.player.vy += (target.y - state.player.y) * dt * 7;
@@ -1759,6 +1838,7 @@ const SVG = {
         l.centerPulse = Math.max(0, l.centerPulse - dt * 2.8);
         l.hitFlash = Math.max(0, l.hitFlash - dt * 2.6);
         l.missFlash = Math.max(0, l.missFlash - dt * 2.1);
+        l.pulseCooldown = Math.max(0, l.pulseCooldown - dt);
         if (l.lastTap) {
           l.lastTap.life -= dt * 2.8;
           if (l.lastTap.life <= 0) l.lastTap = null;
@@ -1771,21 +1851,25 @@ const SVG = {
         l.beams.forEach((beam) => (beam.life -= dt * 1.15));
         l.beams = l.beams.filter((beam) => beam.life > 0);
 
-        if (state.input.just && l.current < l.beacons.length) {
+        const intent = state.camera.intent;
+        const fullBodyPulse = intent && intent.source === "pose" && (intent.star || intent.jump || intent.armsUp || intent.armsOpen || intent.handsTogether);
+        const handPulse = intent && intent.source === "hand" && (intent.victory || intent.love || intent.pinch || intent.open || intent.velocity > 64);
+        const autoPulse = l.current < l.beacons.length && l.pulseCooldown <= 0 && (fullBodyPulse || handPulse);
+
+        if ((state.input.just || autoPulse) && l.current < l.beacons.length) {
           l.ritual = true;
           l.centerPulse = 1;
           const active = l.beacons[l.current];
-          const intent = state.camera.intent;
-          const fullBodyPulse = intent && intent.source === "pose" && (intent.star || intent.jump || intent.armsUp || intent.open);
-          const gesturePulse = intent && (intent.victory || intent.love || intent.velocity > 64 || fullBodyPulse);
+          const gesturePulse = intent && (intent.victory || intent.love || intent.velocity > 64 || fullBodyPulse || handPulse);
           const usingPointerTap = gesturePulse || state.input.pointerJust || (state.pointer.active && state.pointer.seen && !state.input.space);
           const tap = usingPointerTap
             ? { x: state.pointer.x, y: state.pointer.y }
             : { x: state.player.x || cx, y: state.player.y || cy };
-          const nearActive = Boolean(fullBodyPulse) || dist(tap, active) < BEYOND_TAP_RADIUS + (gesturePulse ? 34 : 0);
+          const nearActive = Boolean(fullBodyPulse) || dist(tap, active) < BEYOND_TAP_RADIUS + (gesturePulse ? 56 : 0);
           const origin = fullBodyPulse || nearActive ? { x: active.x, y: active.y } : tap;
           l.lastTap = { x: tap.x, y: tap.y, life: 1, ok: nearActive };
           state.waves.push({ x: origin.x, y: origin.y, r: 6, life: 1.05, hit: new Set(), target: l.current, missed: false });
+          if (autoPulse) l.pulseCooldown = fullBodyPulse ? 0.58 : 0.46;
           tone(nearActive ? 238 + l.current * 26 : 176, 0.2, "sine", nearActive ? 0.038 : 0.024);
           buzz(nearActive ? 8 : 5);
         }
@@ -3292,6 +3376,8 @@ const SVG = {
             results.push(`${level.key}:${passed ? "pass" : "fail"}`);
             if (!passed) throw new Error(`${level.key} did not reach transition`);
           });
+          verifyCameraControls();
+          results.push("camera:pass");
           gameEl.dataset.verify = "pass";
           gameEl.dataset.verifyResults = results.join(",");
         } catch (error) {
@@ -3318,6 +3404,207 @@ const SVG = {
         if (key === "actual") verifyActual();
         if (key === "beyond") verifyBeyond();
         return state.transitioning && state.progress >= 1;
+      }
+
+      function verifyCameraControls() {
+        const modeBefore = state.mode;
+        const enabledBefore = state.camera.enabled;
+        const taskBefore = state.camera.task;
+        const intentBefore = state.camera.intent;
+        try {
+          state.camera.enabled = true;
+          verifyCameraGather("hands");
+          verifyCameraGather("body");
+          verifyCameraSafety();
+          verifyCameraLove();
+          verifyCameraActual();
+          verifyCameraBeyond();
+        } finally {
+          state.mode = modeBefore;
+          state.camera.enabled = enabledBefore;
+          state.camera.task = taskBefore;
+          state.camera.intent = intentBefore;
+          resetVerifiedControls();
+        }
+      }
+
+      function verifyCameraGather(mode) {
+        state.mode = mode;
+        state.camera.task = mode === "body" ? "pose" : "gesture";
+        state.levelIndex = 1;
+        initLevel();
+        state.transitioning = false;
+        resetVerifiedControls();
+        state.camera.enabled = true;
+        const item = state.levelState.items[0];
+        state.camera.intent = mode === "body"
+          ? makePoseIntent(item.x, item.y, { star: true, armsOpen: true, open: true, spread: 1 })
+          : makeHandIntent(item.x, item.y, { open: true, spread: 1 });
+        state.pointer.seen = true;
+        state.pointer.x = item.x;
+        state.pointer.y = item.y;
+        tickBody(0.016);
+        if (state.levelState.collected < 1) throw new Error(`${mode} gather camera control did not collect`);
+      }
+
+      function verifyCameraSafety() {
+        state.mode = "body";
+        state.camera.task = "pose";
+        state.levelIndex = 2;
+        initLevel();
+        state.transitioning = false;
+        resetVerifiedControls();
+        state.camera.enabled = true;
+        state.camera.intent = makePoseIntent(state.width * 0.5, state.height * 0.52, {
+          shield: true,
+          armsOpen: true,
+          handsTogether: true,
+          open: true,
+          fist: true,
+          spread: 1
+        });
+        tickSafety(0.016);
+        if (state.levelState.sealed < state.levelState.nodes.length) throw new Error("pose safety shield did not seal shelter");
+      }
+
+      function verifyCameraLove() {
+        state.mode = "hands";
+        state.camera.task = "gesture";
+        state.levelIndex = 3;
+        initLevel();
+        state.transitioning = false;
+        resetVerifiedControls();
+        state.camera.enabled = true;
+        state.pointer.active = true;
+        state.pointer.seen = true;
+        state.levelState.nodes.forEach((node) => {
+          if (node.linked || state.transitioning) return;
+          state.player.x = node.x;
+          state.player.y = node.y;
+          state.pointer.x = node.x;
+          state.pointer.y = node.y;
+          state.camera.intent = makeHandIntent(node.x, node.y, { open: true, love: true, spread: 1 });
+          tickLove(0.016);
+        });
+        if (state.levelState.links < state.levelState.nodes.length) throw new Error("hand love thread did not link nodes");
+      }
+
+      function verifyCameraActual() {
+        state.mode = "body";
+        state.camera.task = "pose";
+        state.levelIndex = 5;
+        initLevel();
+        state.transitioning = false;
+        resetVerifiedControls();
+        state.camera.enabled = true;
+        let guard = 0;
+        while (!state.transitioning && state.levelState.path[state.levelState.next] && guard < 20) {
+          const target = state.levelState.path[state.levelState.next];
+          state.camera.intent = makePoseIntent(target.x, target.y, { point: true, armsUp: true, open: true, spread: 0.85 });
+          tickActual(0.016);
+          guard += 1;
+        }
+        if (!state.transitioning || state.progress < 1) throw new Error("pose actualization reach did not trace path");
+      }
+
+      function verifyCameraBeyond() {
+        state.mode = "body";
+        state.camera.task = "pose";
+        state.levelIndex = 6;
+        initLevel();
+        state.transitioning = false;
+        resetVerifiedControls();
+        state.camera.enabled = true;
+        state.camera.intent = makePoseIntent(state.width * 0.5, state.height * 0.52, {
+          star: true,
+          armsOpen: true,
+          armsUp: true,
+          jump: true,
+          open: true,
+          love: true,
+          spread: 1,
+          energy: 1
+        });
+        let guard = 0;
+        while (!state.transitioning && guard < 980) {
+          tickBeyond(0.016);
+          guard += 1;
+        }
+        if (!state.transitioning || state.progress < 1) throw new Error("pose transcendence pulse did not awaken beacons");
+      }
+
+      function makeHandIntent(x, y, overrides = {}) {
+        return {
+          source: "hand",
+          rawX: x,
+          rawY: y,
+          x,
+          y,
+          palmX: x,
+          palmY: y,
+          pinch: false,
+          open: false,
+          fist: false,
+          point: false,
+          victory: false,
+          love: false,
+          thumbUp: false,
+          thumbDown: false,
+          spread: 0.5,
+          openness: 0.5,
+          velocity: 0,
+          swipe: { x: 0, y: 0, speed: 0 },
+          confidence: 1,
+          ...overrides
+        };
+      }
+
+      function makePoseIntent(x, y, overrides = {}) {
+        const leftWrist = { x: x - 120, y, visibility: 1 };
+        const rightWrist = { x: x + 120, y, visibility: 1 };
+        const center = { x, y, visibility: 1 };
+        return {
+          source: "pose",
+          rawX: x,
+          rawY: y,
+          x,
+          y,
+          palmX: x,
+          palmY: y,
+          centerX: x,
+          centerY: y,
+          pinch: false,
+          open: false,
+          fist: false,
+          point: false,
+          victory: false,
+          love: false,
+          thumbUp: false,
+          thumbDown: false,
+          spread: 0.7,
+          openness: 0.7,
+          velocity: 0,
+          swipe: { x: 0, y: 0, speed: 0 },
+          confidence: 1,
+          armsOpen: false,
+          armsUp: false,
+          handsTogether: false,
+          crouch: false,
+          jump: false,
+          star: false,
+          shield: false,
+          energy: 0,
+          pose: {
+            leftWrist,
+            rightWrist,
+            bodyCenter: center,
+            leftShoulder: { x: x - 56, y: y - 76, visibility: 1 },
+            rightShoulder: { x: x + 56, y: y - 76, visibility: 1 },
+            leftHip: { x: x - 44, y: y + 70, visibility: 1 },
+            rightHip: { x: x + 44, y: y + 70, visibility: 1 }
+          },
+          ...overrides
+        };
       }
 
       function resetVerifiedControls() {

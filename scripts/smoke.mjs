@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 
 const PORT = Number(process.env.SMOKE_PORT || 4173);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
-const LEVELS = "intro:pass,body:pass,safety:pass,love:pass,esteem:pass,actual:pass,beyond:pass";
+const LEVELS = "intro:pass,body:pass,safety:pass,love:pass,esteem:pass,actual:pass,beyond:pass,camera:pass";
 
 const server = spawn("npm", ["run", "preview", "--", "--port", String(PORT)], {
   stdio: ["ignore", "pipe", "pipe"],
