@@ -1,0 +1,19 @@
+{
+  "name": "needs-game",
+  "version": "1.0.0",
+  "private": false,
+  "description": "A camera-first embodied Maslow browser game.",
+  "type": "module",
+  "scripts": {
+    "verify": "node --check src/game.js",
+    "serve": "python3 -m http.server 4173"
+  },
+  "keywords": [
+    "game",
+    "mediapipe",
+    "maslow",
+    "camera",
+    "embodied"
+  ],
+  "license": "UNLICENSED"
+}
