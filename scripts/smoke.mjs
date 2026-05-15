@@ -7,7 +7,8 @@ const LEVELS = "intro:pass,body:pass,safety:pass,love:pass,esteem:pass,actual:pa
 
 const server = spawn("npm", ["run", "preview", "--", "--port", String(PORT)], {
   stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, CI: "1" }
+  env: { ...process.env, CI: "1" },
+  detached: process.platform !== "win32"
 });
 
 let serverOutput = "";
@@ -29,7 +30,7 @@ try {
   }
   console.log("smoke:pass");
 } finally {
-  server.kill("SIGTERM");
+  stopServer();
 }
 
 async function smokeViewport(browser, viewport) {
@@ -101,4 +102,18 @@ async function waitForServer(url) {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
   throw new Error(`Preview server did not start at ${url}\n${serverOutput}`);
+}
+
+function stopServer() {
+  if (!server.pid || server.killed) return;
+  try {
+    if (process.platform === "win32") server.kill("SIGTERM");
+    else process.kill(-server.pid, "SIGTERM");
+  } catch {
+    try {
+      server.kill("SIGTERM");
+    } catch {
+      // The server already exited.
+    }
+  }
 }
