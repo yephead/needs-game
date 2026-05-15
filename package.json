@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "verify": "npm run typecheck && npm run build",
+    "build:budget": "node scripts/budget.mjs",
+    "verify": "npm run typecheck && npm run build && npm run build:budget",
     "smoke": "node scripts/smoke.mjs",
     "ci": "npm run verify && npm run smoke"
   },

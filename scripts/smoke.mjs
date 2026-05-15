@@ -48,10 +48,19 @@ async function smokeViewport(browser, viewport) {
     const game = document.querySelector(".game");
     return game?.dataset.verify === "pass" || game?.dataset.verify === "fail";
   }, null, { timeout: 15_000 });
+  await page
+    .waitForFunction(() => navigator.serviceWorker?.getRegistration("/").then(Boolean), null, { timeout: 6_000 })
+    .catch(() => undefined);
   await page.waitForTimeout(1_500);
 
-  const result = await page.evaluate(() => {
+  const result = await page.evaluate(async () => {
     const game = document.querySelector(".game");
+    const meta = Object.fromEntries(
+      [...document.querySelectorAll("meta[property], meta[name]")].map((element) => [
+        element.getAttribute("property") || element.getAttribute("name"),
+        element.getAttribute("content")
+      ])
+    );
     const overflowing = [...document.querySelectorAll("button, .level-chip, .meter, .stage-note, .start-panel")]
       .map((element) => ({ name: element.id || element.className || element.tagName, rect: element.getBoundingClientRect() }))
       .filter(({ rect }) => rect.left < -1 || rect.right > window.innerWidth + 1 || rect.top < -1 || rect.bottom > window.innerHeight + 1)
@@ -62,6 +71,11 @@ async function smokeViewport(browser, viewport) {
       results: game?.dataset.verifyResults || "",
       pixiCanvas: Boolean(document.querySelector(".pixi-canvas")),
       riveLayer: Boolean(document.querySelector("#riveLayer")),
+      canonical: document.querySelector('link[rel="canonical"]')?.getAttribute("href") || "",
+      manifest: document.querySelector('link[rel="manifest"]')?.getAttribute("href") || "",
+      ogImage: meta["og:image"] || "",
+      twitterCard: meta["twitter:card"] || "",
+      serviceWorker: Boolean(await navigator.serviceWorker?.getRegistration("/").catch(() => null)),
       overflowing
     };
   });
@@ -76,6 +90,15 @@ async function smokeViewport(browser, viewport) {
   }
   if (!result.pixiCanvas || !result.riveLayer) {
     throw new Error(`${viewport.name} effect layers missing: ${JSON.stringify(result)}`);
+  }
+  if (result.canonical !== "https://needs-game.vercel.app/" || result.manifest !== "/site.webmanifest") {
+    throw new Error(`${viewport.name} metadata broken: ${JSON.stringify(result)}`);
+  }
+  if (result.ogImage !== "https://needs-game.vercel.app/og.svg" || result.twitterCard !== "summary_large_image") {
+    throw new Error(`${viewport.name} share metadata broken: ${JSON.stringify(result)}`);
+  }
+  if (!result.serviceWorker) {
+    throw new Error(`${viewport.name} service worker did not register: ${JSON.stringify(result)}`);
   }
   if (result.overflowing.length) {
     throw new Error(`${viewport.name} layout overflow: ${result.overflowing.join(", ")}`);

@@ -19,6 +19,14 @@ Run the production gate:
 npm run verify
 ```
 
+Run the full launch gate:
+
+```sh
+npm run ci
+```
+
+`npm run ci` runs typecheck, production build, bundle budget enforcement, then a Playwright smoke test across desktop and mobile. The smoke test proves every Maslow level completes, Pixi/Rive layers mount, layout does not overflow, launch metadata is intact, and the PWA service worker registers.
+
 For a built-in completion smoke test, visit `/?verify=1` on the dev or preview server and inspect the `.game` element:
 
 - `data-verify="pass"` means every level reached its completion transition through its real update path.
