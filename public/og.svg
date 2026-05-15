@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="a" cx="45%" cy="40%" r="58%">
+      <stop offset="0" stop-color="#1f5d55"/>
+      <stop offset="0.48" stop-color="#0b1918"/>
+      <stop offset="1" stop-color="#050707"/>
+    </radialGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#7dd7c7"/>
+      <stop offset="0.55" stop-color="#f4bd61"/>
+      <stop offset="1" stop-color="#c7a1ff"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#a)"/>
+  <path d="M0 560c240-80 360-20 560-92 210-76 350-220 640-150v312H0z" fill="#091110" opacity=".58"/>
+  <g opacity=".18" stroke="#f4f1e8" stroke-width="1">
+    <path d="M130 0 30 630M260 0 190 630M390 0 350 630M520 0 510 630M650 0 670 630M780 0 830 630M910 0 990 630M1040 0 1150 630"/>
+  </g>
+  <g transform="translate(600 282)" filter="url(#glow)">
+    <path d="M0-155 175 150H-175Z" fill="none" stroke="url(#b)" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M-92 150 0-30 92 150" fill="none" stroke="url(#b)" stroke-width="7"/>
+    <path d="M-48 63h96" fill="none" stroke="#f4f1e8" stroke-width="7" opacity=".82"/>
+    <circle cx="0" cy="-74" r="13" fill="#7dd7c7"/>
+  </g>
+  <text x="600" y="470" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="92" font-weight="800" fill="#f4f1e8" letter-spacing="0">NEEDS</text>
+  <text x="600" y="526" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="600" fill="#b9c9c1" letter-spacing="0">camera-first Maslow game</text>
+</svg>

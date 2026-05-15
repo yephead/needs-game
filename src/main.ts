@@ -1,5 +1,6 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
+import { registerPwa } from "./pwa";
 import "../styles.css";
 
 const target = document.getElementById("app");
@@ -9,3 +10,4 @@ if (!target) {
 }
 
 mount(App, { target });
+registerPwa();

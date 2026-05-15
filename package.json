@@ -9,7 +9,9 @@
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "verify": "npm run typecheck && npm run build"
+    "verify": "npm run typecheck && npm run build",
+    "smoke": "node scripts/smoke.mjs",
+    "ci": "npm run verify && npm run smoke"
   },
   "keywords": [
     "game",
@@ -27,6 +29,7 @@
     "tone": "^15.1.22"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
     "@tsconfig/svelte": "^5.0.8",
     "@types/howler": "^2.2.12",

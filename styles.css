@@ -208,11 +208,14 @@
       }
 
       .rail {
+        position: absolute;
+        left: 50%;
+        top: 6px;
+        z-index: 6;
+        transform: translateX(-50%);
         display: grid;
         grid-template-columns: repeat(7, 34px);
         gap: 6px;
-        justify-self: center;
-        align-self: end;
         pointer-events: auto;
       }
 
@@ -543,10 +546,12 @@
 
         .rail {
           position: absolute;
+          top: auto;
           left: 12px;
           right: 12px;
           bottom: 70px;
           z-index: 5;
+          transform: none;
           grid-template-columns: repeat(7, minmax(28px, 1fr));
           pointer-events: none;
         }

@@ -3,9 +3,12 @@
   "short_name": "NEEDS",
   "description": "A camera-first embodied Maslow browser game.",
   "start_url": "/",
+  "scope": "/",
   "display": "fullscreen",
+  "orientation": "any",
   "background_color": "#071011",
   "theme_color": "#071011",
+  "categories": ["games", "health", "lifestyle"],
   "icons": [
     {
       "src": "/favicon.svg",
