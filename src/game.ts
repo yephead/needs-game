@@ -125,12 +125,12 @@ const SVG = {
 
       const BODY_CUES = {
         intro: "Breathe: open / close",
-        body: "Gather: open hand / crouch-star",
-        safety: "Seal: palm shield / body shield",
-        love: "Thread: arm span",
-        esteem: "Time: jump / arms up",
-        actual: "Trace: reach",
-        beyond: "Release: sign / star pulses"
+        body: "Gather: compress / expand",
+        safety: "Shelter: cross / open",
+        love: "Bond: span / close",
+        esteem: "Rise: crouch / lift",
+        actual: "Shape: reach / sweep",
+        beyond: "Awaken: pulse / star"
       };
       const CLASSIC_CUE = "pointer / arrows / space";
       const DEFAULT_MODE = "hands";
@@ -438,6 +438,8 @@ const SVG = {
           state.levelState.chainPulse = 0;
           state.levelState.starLock = false;
           state.levelState.crouchLock = false;
+          state.levelState.bodySurge = 0;
+          state.levelState.bodySweep = null;
           state.levelState.items = makeItems(12, 50);
         }
 
@@ -448,6 +450,7 @@ const SVG = {
           state.levelState.hitCooldown = 0;
           state.levelState.dangerFlash = 0;
           state.levelState.bodySealPulse = 0;
+          state.levelState.shelterBreath = 0;
         }
 
         if (key === "love") {
@@ -460,6 +463,8 @@ const SVG = {
           state.levelState.order = [state.levelState.nodes[0]];
           state.levelState.thread = [];
           state.levelState.snap = null;
+          state.levelState.bodyThreadPulse = 0;
+          state.levelState.bodySpan = null;
         }
 
         if (key === "esteem") {
@@ -478,6 +483,8 @@ const SVG = {
           state.levelState.lock = 0;
           state.levelState.bodyLiftLock = false;
           state.levelState.bodyStrikeCooldown = 0;
+          state.levelState.bodyPrime = 0;
+          state.levelState.bodyRisePulse = 0;
         }
 
         if (key === "actual") {
@@ -492,6 +499,8 @@ const SVG = {
           state.levelState.next = 0;
           state.levelState.ink = [];
           state.levelState.flow = 0;
+          state.levelState.bodyTracePulse = 0;
+          state.levelState.bodyBrush = null;
         }
 
         if (key === "beyond") {
@@ -522,6 +531,7 @@ const SVG = {
           state.levelState.echoes = [];
           state.levelState.beams = [];
           state.levelState.pulseCooldown = 0;
+          state.levelState.bodyPulse = 0;
         }
 
         updateHud();
@@ -656,9 +666,9 @@ const SVG = {
               },
               runningMode: "VIDEO",
               numPoses: 1,
-              minPoseDetectionConfidence: 0.55,
-              minPosePresenceConfidence: 0.55,
-              minTrackingConfidence: 0.5
+              minPoseDetectionConfidence: 0.38,
+              minPosePresenceConfidence: 0.38,
+              minTrackingConfidence: 0.35
             });
           } else {
             gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
@@ -1094,16 +1104,18 @@ const SVG = {
           leftWrist.y < leftShoulder.y + shoulderWidth * 0.06 &&
           rightWrist.y < rightShoulder.y + shoulderWidth * 0.06;
         const handsTogether = leftWristVisible && rightWristVisible && wristSpan < shoulderWidth * 0.88;
+        const wristsOutsideTorso =
+          Math.abs(leftWrist.x - bodyCenter.x) > shoulderWidth * 0.62 &&
+          Math.abs(rightWrist.x - bodyCenter.x) > shoulderWidth * 0.62;
         const armsOpen =
           leftWristVisible &&
           rightWristVisible &&
           leftArmExtended &&
           rightArmExtended &&
           wristSpan > shoulderWidth * 1.36 &&
-          leftWrist.x < leftShoulder.x - shoulderWidth * 0.12 &&
-          rightWrist.x > rightShoulder.x + shoulderWidth * 0.12 &&
-          leftWrist.y < hipCenter.y + shoulderWidth * 0.18 &&
-          rightWrist.y < hipCenter.y + shoulderWidth * 0.18;
+          wristsOutsideTorso &&
+          leftWrist.y < hipCenter.y + shoulderWidth * 0.26 &&
+          rightWrist.y < hipCenter.y + shoulderWidth * 0.26;
         const wideStance = leftAnkleVisible && rightAnkleVisible && ankleSpan > shoulderWidth * 1.05;
         const wristCenter = midpoint([leftWrist, rightWrist]);
         const crossedArms =
@@ -1121,7 +1133,7 @@ const SVG = {
         }
         const hipDrop = hipCenter.y - state.camera.bodyBaselineY;
         const crouch = hipDrop > shoulderWidth * 0.1 || legCompression < 1.05;
-        const star = armsOpen && (wideStance || bothArmsUp || wristSpan > shoulderWidth * 2.08);
+        const star = armsOpen && (wideStance || bothArmsUp || wristSpan > shoulderWidth * 1.88);
         const centerScreen = poseToScreen(bodyCenter);
         const leadScreen = poseToScreen(leadWrist);
         const previous = state.camera.intent && state.camera.intent.source === "pose" ? state.camera.intent : null;
@@ -1340,8 +1352,8 @@ const SVG = {
         const key = LEVELS[state.levelIndex].key;
         if (intent.source === "pose") {
           if (key === "intro") return intent.armsOpen || intent.star || intent.armsUp || intent.handsTogether || intent.crouch;
-          if (key === "body") return intent.crouch || intent.star || intent.armsOpen || intent.jump || intent.handsTogether;
-          if (key === "safety") return intent.shield || intent.armsOpen || intent.handsTogether || intent.crouch;
+          if (key === "body") return intent.crouch || intent.star || intent.armsOpen || intent.armsUp || intent.jump || intent.handsTogether || intent.point;
+          if (key === "safety") return intent.shield || intent.star || intent.armsOpen || intent.armsUp || intent.handsTogether || intent.crouch;
           if (key === "love") return intent.armsOpen || intent.handsTogether || intent.star;
           if (key === "esteem") return intent.jump || intent.armsUp || intent.thumbUp || intent.energy > 0.76;
           if (key === "actual") return intent.point || intent.armsOpen || intent.armsUp || intent.star;
@@ -1367,10 +1379,44 @@ const SVG = {
 
       function gestureControlPoint(intent) {
         const key = LEVELS[state.levelIndex].key;
-        if (intent.source === "pose" && (key === "body" || key === "safety" || key === "beyond")) return { x: intent.centerX, y: intent.centerY };
+        if (intent.source === "pose") {
+          if (key === "actual") return { x: intent.x, y: intent.y };
+          return { x: intent.centerX, y: intent.centerY };
+        }
         if (key === "safety" || key === "body") return { x: intent.palmX, y: intent.palmY };
         if (key === "beyond" && intent.open) return { x: intent.palmX, y: intent.palmY };
         return { x: intent.x, y: intent.y };
+      }
+
+      function poseBrushPoints(intent) {
+        if (!intent || !intent.pose) return [];
+        return [
+          intent.pose.bodyCenter,
+          intent.pose.leftWrist,
+          intent.pose.rightWrist,
+          intent.pose.leftAnkle,
+          intent.pose.rightAnkle,
+          { x: intent.x, y: intent.y, visibility: intent.confidence || 1 }
+        ].filter(poseVisible);
+      }
+
+      function poseBrushDistance(point, intent) {
+        if (!intent || !intent.pose || !point) return Infinity;
+        const points = poseBrushPoints(intent);
+        let best = points.reduce((min, candidate) => Math.min(min, dist(point, candidate)), Infinity);
+        if (poseVisible(intent.pose.leftWrist) && poseVisible(intent.pose.rightWrist)) {
+          best = Math.min(best, distanceToSegment(point, intent.pose.leftWrist, intent.pose.rightWrist));
+        }
+        if ((intent.star || intent.crouch) && poseVisible(intent.pose.leftAnkle) && poseVisible(intent.pose.rightAnkle)) {
+          best = Math.min(best, distanceToSegment(point, intent.pose.leftAnkle, intent.pose.rightAnkle));
+        }
+        if (poseVisible(intent.pose.bodyCenter) && poseVisible(intent.pose.leftWrist)) {
+          best = Math.min(best, distanceToSegment(point, intent.pose.bodyCenter, intent.pose.leftWrist));
+        }
+        if (poseVisible(intent.pose.bodyCenter) && poseVisible(intent.pose.rightWrist)) {
+          best = Math.min(best, distanceToSegment(point, intent.pose.bodyCenter, intent.pose.rightWrist));
+        }
+        return best;
       }
 
       function pointerFromEvent(event) {
@@ -1675,32 +1721,55 @@ const SVG = {
         const l = state.levelState;
         const intent = state.camera.intent;
         const handGather = intent && intent.source === "hand" && (intent.open || intent.fist || intent.pinch || intent.love);
-        const bodyGather = intent && intent.source === "pose" && (intent.star || intent.crouch || intent.armsOpen || intent.jump || intent.handsTogether);
+        const bodyGather = intent && intent.source === "pose" && (intent.star || intent.crouch || intent.armsOpen || intent.armsUp || intent.jump || intent.handsTogether || intent.point);
+        if (bodyGather) {
+          stageNote.textContent = intent.star
+            ? "Gather: whole field"
+            : intent.crouch
+              ? "Gather: compress"
+              : intent.point
+                ? "Gather: reach"
+                : "Gather: expand";
+        }
         const gatherOrigin = bodyGather
-          ? { x: intent.centerX, y: intent.centerY }
+          ? intent.point && !intent.star ? { x: intent.x, y: intent.y } : { x: intent.centerX, y: intent.centerY }
           : handGather
             ? { x: intent.palmX, y: intent.palmY }
             : state.player;
         const gatherRange = bodyGather
-          ? intent.star ? 460 : intent.jump ? 390 : intent.crouch ? 330 : intent.armsOpen ? 300 : 250
+          ? intent.star ? 520 : intent.jump ? 430 : intent.crouch ? 380 : intent.armsOpen || intent.armsUp ? 340 : intent.point ? 320 : 270
           : handGather
             ? 190 + intent.spread * 95 + (intent.pinch || intent.fist ? 38 : 0)
             : 0;
         const collectRange = bodyGather
-          ? intent.star ? 210 : intent.jump ? 160 : intent.crouch ? 132 : 118
+          ? intent.star ? 250 : intent.jump ? 190 : intent.crouch ? 165 : intent.point ? 155 : 138
           : handGather
             ? 62 + intent.spread * 36 + (intent.pinch || intent.fist ? 32 : 0)
             : 0;
         const fullBodyGather = bodyGather ? gatherRange * 0.38 : 0;
+        l.bodySurge = Math.max(0, (l.bodySurge || 0) - dt * 2.6);
+        if (l.bodySweep) {
+          l.bodySweep.life -= dt * 2.2;
+          if (l.bodySweep.life <= 0) l.bodySweep = null;
+        }
+        if (bodyGather) l.bodySurge = Math.max(l.bodySurge, intent.star ? 1 : intent.crouch ? 0.78 : 0.42);
         const starSurge = intent && intent.source === "pose" && intent.star && !l.starLock;
         const crouchSurge = intent && intent.source === "pose" && intent.crouch && !l.crouchLock;
         if (starSurge || crouchSurge) {
-          const radius = starSurge ? 310 : 210;
+          const radius = starSurge ? 380 : 250;
           l.chainPulse = 1;
+          l.bodySweep = {
+            x: intent.centerX,
+            y: intent.centerY,
+            r: radius,
+            life: 1,
+            star: starSurge
+          };
           l.items.forEach((item) => {
-            if (!item.collected && dist(item, state.player) < radius) item.pull = starSurge ? 1.35 : 0.95;
+            const bodyDistance = Math.min(dist(item, { x: intent.centerX, y: intent.centerY }), poseBrushDistance(item, intent));
+            if (!item.collected && bodyDistance < radius) item.pull = starSurge ? 1.55 : 1.05;
           });
-          spawnRipple(state.player.x, state.player.y, starSurge ? LEVELS[1].color2 : LEVELS[1].color, starSurge ? 220 : 145);
+          spawnRipple(intent.centerX, intent.centerY, starSurge ? LEVELS[1].color2 : LEVELS[1].color, starSurge ? 260 : 170);
           successTone(1, starSurge ? 2 : 1, 0.08);
         }
         l.starLock = Boolean(intent && intent.source === "pose" && intent.star);
@@ -1713,7 +1782,8 @@ const SVG = {
           item.phase += dt;
           item.pull = Math.max(0, item.pull - dt * 1.8);
           const d = dist(item, state.player);
-          const gatherDistance = gatherRange > 0 ? dist(item, gatherOrigin) : Infinity;
+          const bodyDistance = bodyGather ? poseBrushDistance(item, intent) : Infinity;
+          const gatherDistance = gatherRange > 0 ? Math.min(dist(item, gatherOrigin), bodyDistance) : Infinity;
           const magnetRange = 128 + l.combo * 12 + (handGather ? 94 + intent.spread * 60 : 0) + fullBodyGather;
           if (gatherDistance < gatherRange) {
             const strength = (bodyGather ? 250 : 180) * Math.max(0.28, 1 - gatherDistance / Math.max(1, gatherRange));
@@ -1728,7 +1798,7 @@ const SVG = {
             item.x += Math.cos(item.phase * 1.7 + item.kind) * dt * 12;
             item.y += Math.sin(item.phase * 1.3 + item.kind) * dt * 10;
           }
-          const directHit = collectRange > 0 && dist(item, gatherOrigin) < item.r + collectRange;
+          const directHit = collectRange > 0 && Math.min(dist(item, gatherOrigin), bodyDistance) < item.r + collectRange;
           const hit = directHit || dist(item, state.player) < item.r + state.player.r;
           if (hit) {
             item.collected = true;
@@ -1756,17 +1826,25 @@ const SVG = {
         l.hitCooldown = Math.max(0, l.hitCooldown - dt);
         l.dangerFlash = Math.max(0, l.dangerFlash - dt * 2.8);
         l.bodySealPulse = Math.max(0, l.bodySealPulse - dt * 2.5);
+        l.shelterBreath = Math.max(0, (l.shelterBreath || 0) - dt * 1.8);
         const intent = state.camera.intent;
-        const bodyShielding = intent && intent.source === "pose" && (intent.shield || intent.armsOpen || intent.handsTogether || intent.crouch);
+        const bodyShielding = intent && intent.source === "pose" && (intent.shield || intent.star || intent.armsOpen || intent.armsUp || intent.handsTogether || intent.crouch);
         const handShielding = intent && intent.source === "hand" && (intent.open || intent.fist || intent.pinch);
         const shielding = bodyShielding || handShielding || (intent && (intent.open || intent.fist || intent.shield));
+        if (bodyShielding) {
+          stageNote.textContent = intent.shield || intent.handsTogether
+            ? "Shelter: lock"
+            : intent.star || intent.armsOpen
+              ? "Shelter: expand"
+              : "Shelter: ground";
+        }
         const sealOrigin = bodyShielding && intent
           ? { x: intent.centerX, y: intent.centerY }
           : handShielding && intent
             ? { x: intent.palmX, y: intent.palmY }
             : state.player;
         const sealRadius = bodyShielding && intent
-          ? 150 + intent.spread * 124 + (intent.armsOpen ? 46 : 0)
+          ? 190 + intent.spread * 140 + (intent.armsOpen ? 58 : 0) + (intent.shield ? 86 : 0) + (intent.star ? 110 : 0)
           : handShielding && intent
             ? 96 + intent.spread * 72 + (intent.pinch || intent.fist ? 26 : 0)
             : 34;
@@ -1781,6 +1859,7 @@ const SVG = {
             state.shake = Math.max(state.shake, 0.35);
             l.dangerFlash = 0.35;
             l.bodySealPulse = bodyShielding ? 1 : Math.max(l.bodySealPulse, 0.58);
+            l.shelterBreath = bodyShielding ? 1 : l.shelterBreath;
             spawnRipple(sealOrigin.x, sealOrigin.y, LEVELS[2].color, bodyShielding ? 210 : 150);
             successTone(2, l.sealed + 1, 0.08);
           } else {
@@ -1801,10 +1880,14 @@ const SVG = {
           }
         }
         l.nodes.forEach((node) => {
-          if (!node.active && dist(node, sealOrigin) < sealRadius) {
+          const sealDistance = bodyShielding && intent
+            ? Math.min(dist(node, sealOrigin), poseBrushDistance(node, intent))
+            : dist(node, sealOrigin);
+          if (!node.active && sealDistance < sealRadius) {
             node.active = true;
             l.sealed += 1;
             l.bodySealPulse = bodyShielding ? 1 : Math.max(l.bodySealPulse, handShielding ? 0.52 : 0);
+            l.shelterBreath = bodyShielding ? 1 : l.shelterBreath;
             state.progress = l.sealed / l.nodes.length;
             burst(node.x, node.y, LEVELS[2].color, 26);
             spawnRipple(node.x, node.y, LEVELS[2].color2, bodyShielding ? 112 : 76);
@@ -1823,10 +1906,15 @@ const SVG = {
         const handThreading = intent && intent.source === "hand" && (intent.love || intent.open || intent.pinch);
         const drawing = state.pointer.active || state.input.space || Boolean(poseThreading || handThreading);
         const snapRange = poseThreading && intent
-          ? 138 + intent.spread * 92 + (intent.star ? 60 : 0)
+          ? 190 + intent.spread * 112 + (intent.star ? 96 : 0) + (intent.handsTogether ? 46 : 0)
           : handThreading && intent
             ? 112 + intent.spread * 58 + (intent.love ? 34 : 0)
             : 82;
+        l.bodyThreadPulse = Math.max(0, (l.bodyThreadPulse || 0) - dt * 2.4);
+        if (l.bodySpan) {
+          l.bodySpan.life -= dt * 2.6;
+          if (l.bodySpan.life <= 0) l.bodySpan = null;
+        }
         l.snap = l.snap && l.snap.life > 0 ? { ...l.snap, life: l.snap.life - dt * 2.8 } : null;
         if (drawing) {
           l.thread.push({ x: state.player.x, y: state.player.y, life: 1 });
@@ -1850,30 +1938,49 @@ const SVG = {
             }
           }
         });
+        const linkNode = (node, pulse = 0) => {
+          if (!node || node.linked) return;
+          node.linked = true;
+          l.links += 1;
+          l.order.push(node);
+          l.snap = { x: node.x, y: node.y, life: 1 };
+          l.bodyThreadPulse = Math.max(l.bodyThreadPulse, pulse);
+          state.progress = l.links / l.nodes.length;
+          state.player.vx += (node.x - state.player.x) * 1.9;
+          state.player.vy += (node.y - state.player.y) * 1.9;
+          spawnRipple(node.x, node.y, LEVELS[3].color, 90 + pulse * 48);
+          burst(node.x, node.y, LEVELS[3].color, 26);
+          successTone(3, l.links, 0.15);
+          buzz([8, 18, 8]);
+        };
         if (poseThreading && intent.pose && intent.pose.leftWrist && intent.pose.rightWrist) {
+          stageNote.textContent = intent.handsTogether ? "Bond: draw in" : "Bond: span";
+          l.bodySpan = {
+            left: intent.pose.leftWrist,
+            right: intent.pose.rightWrist,
+            center: intent.pose.bodyCenter,
+            life: 1
+          };
           l.nodes.forEach((node) => {
             if (node.linked) return;
             const d = distanceToSegment(node, intent.pose.leftWrist, intent.pose.rightWrist);
             const wristD = Math.min(dist(node, intent.pose.leftWrist), dist(node, intent.pose.rightWrist), dist(node, { x: intent.centerX, y: intent.centerY }));
-            const bodyThreadDistance = Math.min(d, wristD);
-            if (bodyThreadDistance < 118 + intent.spread * 62 && bodyThreadDistance < snapDistance) {
+            const bodyThreadDistance = Math.min(d, wristD, poseBrushDistance(node, intent));
+            const bodyThreadRange = intent.star
+              ? 190
+              : intent.handsTogether
+                ? 152
+                : 122 + intent.spread * 76;
+            if (bodyThreadDistance < bodyThreadRange) {
+              linkNode(node, intent.star ? 1 : 0.72);
+            } else if (bodyThreadDistance < snapDistance) {
               snapCandidate = node;
               snapDistance = bodyThreadDistance;
             }
           });
         }
         if (drawing && snapCandidate && snapDistance < snapRange) {
-          snapCandidate.linked = true;
-          l.links += 1;
-          l.order.push(snapCandidate);
-          l.snap = { x: snapCandidate.x, y: snapCandidate.y, life: 1 };
-          state.progress = l.links / l.nodes.length;
-          state.player.vx += (snapCandidate.x - state.player.x) * 1.9;
-          state.player.vy += (snapCandidate.y - state.player.y) * 1.9;
-          spawnRipple(snapCandidate.x, snapCandidate.y, LEVELS[3].color, 90);
-          burst(snapCandidate.x, snapCandidate.y, LEVELS[3].color, 26);
-          successTone(3, l.links, 0.15);
-          buzz([8, 18, 8]);
+          linkNode(snapCandidate, poseThreading ? 0.72 : 0);
         }
         if (state.progress >= 1) levelUp("love");
       }
@@ -1885,20 +1992,50 @@ const SVG = {
         l.flash = Math.max(0, l.flash - dt * 3);
         l.lock = Math.max(0, l.lock - dt * 2.6);
         l.bodyStrikeCooldown = Math.max(0, l.bodyStrikeCooldown - dt);
+        l.bodyRisePulse = Math.max(0, (l.bodyRisePulse || 0) - dt * 2.1);
         const intent = state.camera.intent;
         if (intent && intent.thumbDown) {
           l.angle -= dt * 0.55;
         }
-        const bodyLift = intent && intent.source === "pose" && (intent.jump || intent.armsUp || intent.energy > 0.82);
+        const bodyLift = intent && intent.source === "pose" && (intent.jump || intent.armsUp || intent.star || intent.energy > 0.72);
+        const bodyLoad = intent && intent.source === "pose" && (intent.crouch || intent.handsTogether);
+        if (intent && intent.source === "pose") {
+          l.bodyPrime = clamp((l.bodyPrime || 0) + dt * (bodyLoad ? 1.85 : -0.42), 0, 1);
+          if (bodyLoad) stageNote.textContent = "Rise: load";
+          if (bodyLift) stageNote.textContent = "Rise: lift";
+          const liftTrigger = bodyLift && !l.bodyLiftLock;
+          const liftPulse = bodyLift && l.bodyStrikeCooldown <= 0 && (liftTrigger || l.bodyPrime > 0.22 || intent.star);
+          if (!bodyLift) l.bodyLiftLock = false;
+          if (liftTrigger) l.bodyLiftLock = true;
+          if (liftPulse) {
+            const gain = intent.star || l.bodyPrime > 0.62 ? 2 : 1;
+            for (let i = 0; i < gain && l.hits < 6; i += 1) {
+              const hitTarget = l.targets[l.hits] ?? l.target;
+              burst(state.width * 0.5 + Math.cos(hitTarget) * 118, state.height * 0.52 + Math.sin(hitTarget) * 118, LEVELS[4].color, 34);
+              successTone(4, l.hits + 1, 0.12);
+              l.hits += 1;
+            }
+            l.flash = 1;
+            l.lock = 1;
+            l.bodyRisePulse = 1;
+            l.bodyStrikeCooldown = intent.star ? 0.42 : 0.54;
+            l.bodyPrime = 0;
+            state.progress = l.hits / 6;
+            if (l.hits < 6) l.target = l.targets[l.hits];
+            buzz(intent.star ? [10, 24, 10] : 15);
+          }
+          if (state.progress >= 1) levelUp("esteem");
+          return;
+        }
         if (bodyLift) l.angle -= dt * (intent.armsUp ? 0.28 : 0.16);
         const bodyLiftTrigger = bodyLift && !l.bodyLiftLock;
-        const bodyAutoStrike = bodyLift && l.bodyStrikeCooldown <= 0 && Math.abs(angleDelta(l.angle, l.target)) < 0.56;
+        const bodyAutoStrike = bodyLift && l.bodyStrikeCooldown <= 0 && Math.abs(angleDelta(l.angle, l.target)) < (intent.star ? 1.28 : 0.94);
         if (!bodyLift) l.bodyLiftLock = false;
         if (bodyLiftTrigger) l.bodyLiftLock = true;
         if (state.input.just || bodyLiftTrigger || bodyAutoStrike) {
           const diff = Math.abs(angleDelta(l.angle, l.target));
           const handPrecision = intent && (intent.thumbUp || intent.victory);
-          const bodyPrecision = bodyLift ? 0.5 + clamp(intent.energy, 0, 1) * 0.1 : 0;
+          const bodyPrecision = bodyLift ? 0.86 + clamp(intent.energy, 0, 1) * 0.28 + (intent.star ? 0.18 : 0) : 0;
           if (diff < (bodyLift ? bodyPrecision : handPrecision ? 0.36 : 0.27)) {
             const hitTarget = l.target;
             l.hits += 1;
@@ -1925,6 +2062,11 @@ const SVG = {
         if (l.ink.length > 180) l.ink.shift();
         l.ink.forEach((dot) => (dot.life -= dt * 0.22));
         l.flow = Math.max(0, l.flow - dt * 2.2);
+        l.bodyTracePulse = Math.max(0, (l.bodyTracePulse || 0) - dt * 2.2);
+        if (l.bodyBrush) {
+          l.bodyBrush.life -= dt * 2.7;
+          if (l.bodyBrush.life <= 0) l.bodyBrush = null;
+        }
         const target = l.path[l.next];
         let reachedTarget = false;
         if (target) {
@@ -1937,11 +2079,15 @@ const SVG = {
               dist(target, { x: intent.x, y: intent.y }),
               intent.pose.leftWrist ? dist(target, intent.pose.leftWrist) : Infinity,
               intent.pose.rightWrist ? dist(target, intent.pose.rightWrist) : Infinity,
-              dist(target, { x: intent.centerX, y: intent.centerY })
+              dist(target, { x: intent.centerX, y: intent.centerY }),
+              poseBrushDistance(target, intent)
             )
             : Infinity;
-          const bodyReach = intent && intent.source === "pose" && tracing && bodyReachDistance < (intent.star || intent.armsUp ? 172 : 132);
-          const range = tracing ? (intent && intent.source === "pose" ? 220 : 166) : 115;
+          const bodyReachRange = intent && intent.source === "pose"
+            ? intent.star || intent.armsUp ? 310 : intent.point ? 236 : intent.armsOpen ? 230 : 190
+            : 0;
+          const bodyReach = intent && intent.source === "pose" && tracing && bodyReachDistance < bodyReachRange;
+          const range = tracing ? (intent && intent.source === "pose" ? 280 : 166) : 115;
           if (d < range) {
             const pull = (1 - d / range) * (tracing ? 92 : 60);
             state.player.vx += ((target.x - state.player.x) / Math.max(1, d)) * pull * dt;
@@ -1949,6 +2095,17 @@ const SVG = {
           }
           if (bodyReach || handReach) {
             reachedTarget = true;
+            l.bodyTracePulse = bodyReach ? 1 : l.bodyTracePulse;
+            if (bodyReach) {
+              stageNote.textContent = intent.star || intent.armsOpen ? "Shape: sweep" : "Shape: reach";
+              l.bodyBrush = {
+                x: intent.x,
+                y: intent.y,
+                centerX: intent.centerX,
+                centerY: intent.centerY,
+                life: 1
+              };
+            }
             state.player.vx += (target.x - state.player.x) * dt * 7;
             state.player.vy += (target.y - state.player.y) * dt * 7;
           }
@@ -1973,6 +2130,7 @@ const SVG = {
         l.hitFlash = Math.max(0, l.hitFlash - dt * 2.6);
         l.missFlash = Math.max(0, l.missFlash - dt * 2.1);
         l.pulseCooldown = Math.max(0, l.pulseCooldown - dt);
+        l.bodyPulse = Math.max(0, (l.bodyPulse || 0) - dt * 2.4);
         if (l.lastTap) {
           l.lastTap.life -= dt * 2.8;
           if (l.lastTap.life <= 0) l.lastTap = null;
@@ -2004,6 +2162,7 @@ const SVG = {
           l.lastTap = { x: tap.x, y: tap.y, life: 1, ok: nearActive };
           state.waves.push({ x: origin.x, y: origin.y, r: 6, life: 1.05, hit: new Set(), target: l.current, missed: false });
           if (autoPulse) l.pulseCooldown = fullBodyPulse ? 0.58 : 0.46;
+          if (fullBodyPulse) l.bodyPulse = 1;
           tone(nearActive ? 238 + l.current * 26 : 176, 0.2, "sine", nearActive ? 0.038 : 0.024);
           buzz(nearActive ? 8 : 5);
         }
@@ -2257,6 +2416,29 @@ const SVG = {
       function drawBody() {
         const l = state.levelState;
         drawBasePyramid(1);
+        if (l.bodySurge > 0) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = withAlpha(LEVELS[1].color2, l.bodySurge * 0.42);
+          ctx.fillStyle = withAlpha(LEVELS[1].color, l.bodySurge * 0.06);
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          ctx.ellipse(state.player.x, state.player.y, 90 + l.bodySurge * 120, 54 + l.bodySurge * 72, 0, 0, TAU);
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+        if (l.bodySweep) {
+          ctx.save();
+          ctx.globalCompositeOperation = "lighter";
+          ctx.strokeStyle = withAlpha(l.bodySweep.star ? LEVELS[1].color2 : LEVELS[1].color, l.bodySweep.life * 0.48);
+          ctx.lineWidth = l.bodySweep.star ? 3.2 : 2.2;
+          ctx.setLineDash(l.bodySweep.star ? [] : [9, 12]);
+          ctx.beginPath();
+          ctx.arc(l.bodySweep.x, l.bodySweep.y, l.bodySweep.r * (1.06 - l.bodySweep.life * 0.18), 0, TAU);
+          ctx.stroke();
+          ctx.restore();
+        }
         if (l.combo > 1 && l.comboTimer > 0) {
           ctx.save();
           ctx.globalCompositeOperation = "lighter";
@@ -2348,6 +2530,13 @@ const SVG = {
           ctx.ellipse(core.x, core.y, 82 + l.bodySealPulse * 34, 56 + l.bodySealPulse * 24, 0, 0, TAU);
           ctx.fill();
           ctx.stroke();
+          if (l.shelterBreath > 0) {
+            ctx.strokeStyle = withAlpha(LEVELS[2].color2, l.shelterBreath * 0.46);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(core.x, core.y, 156 + l.shelterBreath * 170, 96 + l.shelterBreath * 92, 0, 0, TAU);
+            ctx.stroke();
+          }
         }
         ctx.restore();
       }
@@ -2370,8 +2559,23 @@ const SVG = {
         if (state.pointer.active || state.input.space) {
           softLine(state.player.x, state.player.y, state.pointer.seen ? state.pointer.x : state.player.x, state.pointer.seen ? state.pointer.y : state.player.y, LEVELS[3].color2, 0.34);
         }
+        if (l.bodySpan) {
+          softLine(l.bodySpan.left.x, l.bodySpan.left.y, l.bodySpan.right.x, l.bodySpan.right.y, LEVELS[3].color2, 0.2 + l.bodySpan.life * 0.36);
+          ctx.strokeStyle = withAlpha(LEVELS[3].color, l.bodySpan.life * 0.34);
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.ellipse(l.bodySpan.center.x, l.bodySpan.center.y, 88 + l.bodySpan.life * 122, 48 + l.bodySpan.life * 60, 0, 0, TAU);
+          ctx.stroke();
+        }
         if (intent && intent.source === "pose" && intent.pose && intent.pose.leftWrist && intent.pose.rightWrist && (intent.armsOpen || intent.love)) {
-          softLine(intent.pose.leftWrist.x, intent.pose.leftWrist.y, intent.pose.rightWrist.x, intent.pose.rightWrist.y, LEVELS[3].color2, 0.3);
+          softLine(intent.pose.leftWrist.x, intent.pose.leftWrist.y, intent.pose.rightWrist.x, intent.pose.rightWrist.y, LEVELS[3].color2, 0.3 + (l.bodyThreadPulse || 0) * 1.8);
+          if (l.bodyThreadPulse > 0) {
+            ctx.strokeStyle = withAlpha(LEVELS[3].color2, l.bodyThreadPulse * 2.5);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(intent.centerX, intent.centerY, 90 + l.bodyThreadPulse * 260, 52 + l.bodyThreadPulse * 120, 0, 0, TAU);
+            ctx.stroke();
+          }
         }
         if (l.snap) {
           ctx.strokeStyle = withAlpha(LEVELS[3].color2, l.snap.life * 0.56);
@@ -2430,6 +2634,28 @@ const SVG = {
         for (let i = 0; i < 6; i++) {
           drawStar(-78 + i * 31, -r - 58, 9, i < l.hits ? LEVELS[4].color : "rgba(244,241,232,0.24)", i < l.hits);
         }
+        if (state.mode === "body" || state.camera.task === "pose") {
+          const prime = l.bodyPrime || 0;
+          ctx.strokeStyle = withAlpha(LEVELS[4].color2, 0.18 + prime * 0.38);
+          ctx.fillStyle = withAlpha(LEVELS[4].color, 0.08 + prime * 0.12);
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.roundRect(-38, r + 34, 76, 12, 6);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = withAlpha(LEVELS[4].color2, 0.5 + prime * 0.36);
+          ctx.beginPath();
+          ctx.roundRect(-36, r + 36, 72 * prime, 8, 5);
+          ctx.fill();
+          if (l.bodyRisePulse > 0) {
+            ctx.strokeStyle = withAlpha(LEVELS[4].color2, l.bodyRisePulse * 0.62);
+            ctx.lineWidth = 2.6;
+            for (let i = 0; i < 4; i += 1) {
+              const y = r + 26 - i * 36 - (1 - l.bodyRisePulse) * 34;
+              line(-46 + i * 7, y, 46 - i * 7, y - 18);
+            }
+          }
+        }
         if (l.flash > 0) {
           ctx.globalAlpha = l.flash * 0.24;
           ctx.fillStyle = LEVELS[4].color;
@@ -2466,7 +2692,15 @@ const SVG = {
           ctx.strokeStyle = withAlpha(LEVELS[5].color2, 0.18);
           ctx.lineWidth = 1.4;
           ctx.beginPath();
-          ctx.arc(target.x, target.y, 42, 0, TAU);
+          ctx.arc(target.x, target.y, 42 + (l.bodyTracePulse || 0) * 180, 0, TAU);
+          ctx.stroke();
+        }
+        if (l.bodyBrush) {
+          ctx.strokeStyle = withAlpha(LEVELS[5].color2, l.bodyBrush.life * 0.42);
+          ctx.lineWidth = 2;
+          softLine(l.bodyBrush.centerX, l.bodyBrush.centerY, l.bodyBrush.x, l.bodyBrush.y, LEVELS[5].color2, 0.2 + l.bodyBrush.life * 0.28);
+          ctx.beginPath();
+          ctx.arc(l.bodyBrush.x, l.bodyBrush.y, 34 + l.bodyBrush.life * 86, 0, TAU);
           ctx.stroke();
         }
         l.path.forEach((point, index) => {
@@ -2526,6 +2760,15 @@ const SVG = {
           ctx.stroke();
         }
         drawMandala(cx, cy, 34 + state.progress * 34 + l.centerPulse * 18, withAlpha(LEVELS[6].color2, 0.34 + l.centerPulse * 0.45));
+        if (l.bodyPulse > 0) {
+          ctx.strokeStyle = withAlpha(LEVELS[6].color2, l.bodyPulse * 0.5);
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 3; i += 1) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, 92 + i * 48 + (1 - l.bodyPulse) * 120, 0, TAU);
+            ctx.stroke();
+          }
+        }
         l.beacons.forEach((beacon, index) => {
           const angle = state.time * 0.12 + index;
           const x = beacon.x + Math.cos(angle) * 6;
@@ -2710,8 +2953,11 @@ const SVG = {
         if (key === "body" && state.levelState.items) {
           state.levelState.items.forEach((item) => {
             if (item.collected) return;
-            const d = dist(item, { x, y });
-            if (d < radius * 1.08) softLine(x, y, item.x, item.y, item.kind % 2 ? level.color2 : level.color, clamp(0.3 * (1 - d / (radius * 1.08)), 0.05, 0.3));
+            const d = Math.min(dist(item, { x, y }), poseBrushDistance(item, intent));
+            if (d < radius * 1.08) {
+              const anchor = intent.point ? { x: intent.x, y: intent.y } : { x, y };
+              softLine(anchor.x, anchor.y, item.x, item.y, item.kind % 2 ? level.color2 : level.color, clamp(0.3 * (1 - d / (radius * 1.08)), 0.05, 0.3));
+            }
           });
         } else if (key === "safety" && state.levelState.nodes) {
           drawShield(x, y, 42 + intent.spread * 18, withAlpha(level.color2, 0.76));
@@ -2769,10 +3015,10 @@ const SVG = {
       }
 
       function poseAffordanceRadius(key, intent) {
-        if (key === "body") return intent.star ? 230 : intent.jump ? 190 : intent.crouch ? 150 : 132;
-        if (key === "safety") return 150 + intent.spread * 124 + (intent.armsOpen ? 46 : 0);
-        if (key === "love") return 145 + intent.spread * 84;
-        if (key === "actual") return intent.star || intent.armsUp ? 172 : 132;
+        if (key === "body") return intent.star ? 260 : intent.jump ? 210 : intent.crouch ? 170 : intent.point ? 160 : 145;
+        if (key === "safety") return 190 + intent.spread * 140 + (intent.armsOpen ? 58 : 0) + (intent.shield ? 86 : 0) + (intent.star ? 110 : 0);
+        if (key === "love") return 190 + intent.spread * 112 + (intent.star ? 84 : 0);
+        if (key === "actual") return intent.star || intent.armsUp ? 310 : intent.point ? 236 : intent.armsOpen ? 230 : 190;
         if (key === "beyond") return intent.star ? 170 : 126;
         return intent.armsOpen ? 118 : 74;
       }
@@ -3231,6 +3477,15 @@ const SVG = {
         if (body.star) {
           [pose.leftWrist, pose.rightWrist, pose.leftAnkle, pose.rightAnkle].forEach((point) => {
             if (poseVisible(point)) softLine(core.x, core.y, point.x, point.y, level.color2, 0.22);
+          });
+        }
+        if (body.armsOpen || body.point || body.armsUp) {
+          [pose.leftWrist, pose.rightWrist].filter(poseVisible).forEach((point) => {
+            ctx.strokeStyle = withAlpha(body.action ? level.color2 : level.color, body.action ? 0.5 : 0.24);
+            ctx.lineWidth = body.action ? 2.4 : 1.4;
+            ctx.beginPath();
+            ctx.arc(point.x, point.y, body.point ? 30 : 22 + body.spread * 20, 0, TAU);
+            ctx.stroke();
           });
         }
 
@@ -3718,6 +3973,7 @@ const SVG = {
           state.camera.enabled = true;
           verifyPoseIntentRecognition();
           verifyPoseStability();
+          verifyAppliedPoseGameplay();
           verifyCameraGather("hands");
           verifyCameraGather("body");
           verifyCameraSafety();
@@ -3740,6 +3996,11 @@ const SVG = {
           {
             name: "wide-arm star",
             landmarks: makePoseLandmarks({ leftWrist: { x: 0.18, y: 0.5 }, rightWrist: { x: 0.82, y: 0.5 }, leftAnkle: null, rightAnkle: null }),
+            expect: { armsOpen: true, star: true, open: true }
+          },
+          {
+            name: "mirrored wide-arm star",
+            landmarks: makePoseLandmarks({ leftWrist: { x: 0.82, y: 0.5 }, rightWrist: { x: 0.18, y: 0.5 }, leftAnkle: null, rightAnkle: null }),
             expect: { armsOpen: true, star: true, open: true }
           },
           {
@@ -3817,6 +4078,92 @@ const SVG = {
           state.camera.poseStable = stableBefore;
           state.camera.intent = intentBefore;
         }
+      }
+
+      function verifyAppliedPoseGameplay() {
+        const starPose = () => makePoseLandmarks({ leftWrist: { x: 0.18, y: 0.5 }, rightWrist: { x: 0.82, y: 0.5 }, leftAnkle: null, rightAnkle: null });
+        const shieldPose = () => makePoseLandmarks({ leftWrist: { x: 0.49, y: 0.5 }, rightWrist: { x: 0.51, y: 0.5 } });
+        const liftPose = () => makePoseLandmarks({ leftWrist: { x: 0.42, y: 0.31 }, rightWrist: { x: 0.58, y: 0.31 } });
+        const reachPose = () => makePoseLandmarks({ rightWrist: { x: 0.86, y: 0.5 }, leftWrist: { x: 0.46, y: 0.54 } });
+        const begin = (levelIndex) => {
+          state.mode = "body";
+          state.camera.task = "pose";
+          state.levelIndex = levelIndex;
+          initLevel();
+          state.transitioning = false;
+          resetVerifiedControls();
+          state.camera.enabled = true;
+          state.camera.task = "pose";
+        };
+        const applyPose = (landmarks, frames = 1) => {
+          for (let frame = 0; frame < frames; frame += 1) applyPoseInput(landmarks);
+          if (!state.camera.intent || state.camera.intent.source !== "pose") throw new Error("applied pose did not create pose intent");
+          return state.camera.intent;
+        };
+
+        begin(1);
+        state.levelState.items[0].x = state.width * 0.5;
+        state.levelState.items[0].y = state.height * 0.5;
+        applyPose(starPose());
+        tickBody(0.016);
+        if (state.levelState.collected < 1) throw new Error("applied pose body gather did not collect");
+
+        begin(1);
+        const bodyReachIntent = applyPose(reachPose());
+        state.levelState.items[0].x = bodyReachIntent.x;
+        state.levelState.items[0].y = bodyReachIntent.y;
+        tickBody(0.016);
+        if (state.levelState.collected < 1) throw new Error("applied pose body reach did not collect");
+
+        begin(2);
+        applyPose(starPose());
+        tickSafety(0.016);
+        if (state.levelState.sealed < state.levelState.nodes.length) throw new Error("applied pose safety shield did not seal");
+
+        begin(3);
+        applyPose(starPose());
+        let loveGuard = 0;
+        while (!state.transitioning && state.levelState.links < state.levelState.nodes.length && loveGuard < 12) {
+          tickLove(0.016);
+          loveGuard += 1;
+        }
+        if (state.levelState.links < state.levelState.nodes.length) throw new Error("applied pose love thread did not link");
+
+        begin(4);
+        applyPose(liftPose());
+        state.levelState.angle = state.levelState.target;
+        tickEsteem(0.016);
+        if (state.levelState.hits < 1) throw new Error("applied pose esteem lift did not strike");
+        let esteemGuard = 0;
+        while (!state.transitioning && state.levelState.hits < 6 && esteemGuard < 10) {
+          state.levelState.bodyStrikeCooldown = 0;
+          state.levelState.bodyLiftLock = false;
+          applyPose(liftPose());
+          tickEsteem(0.016);
+          esteemGuard += 1;
+        }
+        if (!state.transitioning || state.progress < 1) throw new Error("applied pose esteem lift did not complete");
+
+        begin(5);
+        const reachIntent = applyPose(reachPose());
+        state.levelState.path[0].x = reachIntent.x;
+        state.levelState.path[0].y = reachIntent.y;
+        tickActual(0.016);
+        if (state.levelState.next < 1) throw new Error("applied pose actualization reach did not trace");
+
+        begin(6);
+        applyPose(starPose());
+        let beyondGuard = 0;
+        while (!state.transitioning && state.levelState.current < 1 && beyondGuard < 140) {
+          tickBeyond(0.016);
+          beyondGuard += 1;
+        }
+        if (state.levelState.current < 1) throw new Error("applied pose beyond pulse did not awaken");
+
+        begin(2);
+        applyPose(shieldPose());
+        tickSafety(0.016);
+        if (state.levelState.sealed < 1) throw new Error("applied pose hands-close shield did not seal");
       }
 
       function verifyCameraGather(mode) {
