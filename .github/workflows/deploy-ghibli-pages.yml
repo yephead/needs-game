@@ -1,0 +1,57 @@
+# Builds the Ghibli AR Studio app and publishes it to GitHub Pages.
+# Enable once: repo Settings -> Pages -> Source: "GitHub Actions".
+# Live URL after first run: https://yephead.github.io/needs-game/
+name: Deploy Ghibli AR Studio (Pages)
+
+on:
+  push:
+    branches:
+      - claude/mediapipe-ghibli-overlay-b2oal9
+      - main
+    paths:
+      - "ghibli-ar-studio/**"
+      - ".github/workflows/deploy-ghibli-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment.
+concurrency:
+  group: ghibli-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ghibli-ar-studio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ghibli-ar-studio/package-lock.json
+      - run: npm ci
+      - name: Build (base path for project Pages)
+        run: npm run build
+        env:
+          VITE_BASE: /needs-game/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ghibli-ar-studio/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

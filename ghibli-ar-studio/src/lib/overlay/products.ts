@@ -1,5 +1,10 @@
 import type { Product } from "./types";
 
+// Resolve asset URLs against the deploy base (works at "/" on Vercel and at a
+// subpath like "/needs-game/" on GitHub Pages).
+const BASE = import.meta.env.BASE_URL;
+const asset = (file: string) => `${BASE}assets/products/${file}`;
+
 /**
  * Product catalog. Asset paths point at the original brand-evocative art in
  * /public/assets/products. To use genuine brand imagery, drop a transparent
@@ -13,7 +18,7 @@ export const PRODUCTS: Product[] = [
     brand: "Gucci",
     name: "Oversized Web Sunglasses",
     category: "Eyewear",
-    asset: "/assets/products/gucci-sunglasses.svg",
+    asset: asset("gucci-sunglasses.svg"),
     anchor: "eyewear",
     scale: 2.15,
     offset: { x: 0, y: 0.02 },
@@ -24,7 +29,7 @@ export const PRODUCTS: Product[] = [
     brand: "Air Jordan",
     name: "AJ1 High",
     category: "Footwear",
-    asset: "/assets/products/air-jordan-sneaker.svg",
+    asset: asset("air-jordan-sneaker.svg"),
     anchor: "footwear-pair",
     scale: 1.75,
     offset: { x: 0.05, y: -0.1 },
@@ -35,7 +40,7 @@ export const PRODUCTS: Product[] = [
     brand: "Gucci",
     name: "GG Marmont Bag",
     category: "Bags",
-    asset: "/assets/products/gucci-bag.svg",
+    asset: asset("gucci-bag.svg"),
     anchor: "bag",
     scale: 1.5,
     offset: { x: 0, y: 0.55 },
@@ -46,7 +51,7 @@ export const PRODUCTS: Product[] = [
     brand: "Gucci",
     name: "GG Baseball Cap",
     category: "Headwear",
-    asset: "/assets/products/gucci-cap.svg",
+    asset: asset("gucci-cap.svg"),
     anchor: "headwear",
     scale: 1.85,
     offset: { x: 0, y: -0.32 },
@@ -57,7 +62,7 @@ export const PRODUCTS: Product[] = [
     brand: "Maison",
     name: "Gold Chrono Watch",
     category: "Accessories",
-    asset: "/assets/products/luxe-watch.svg",
+    asset: asset("luxe-watch.svg"),
     anchor: "watch",
     scale: 0.9,
     offset: { x: 0, y: 0 },

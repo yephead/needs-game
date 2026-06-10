@@ -4,6 +4,8 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 // MediaPipe ships large wasm; we load those from CDN at runtime (see visionEngine.ts)
 // so the bundle stays lean. Vite only bundles the small JS glue.
 export default defineConfig({
+  // base "/" for Vercel/root hosting; set VITE_BASE=/needs-game/ for GitHub Pages.
+  base: process.env.VITE_BASE || "/",
   plugins: [svelte()],
   build: {
     target: "es2022",
