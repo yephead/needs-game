@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 161" width="260" height="161">
+  <defs>
+    <linearGradient id="upper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d8443c"/>
+      <stop offset="1" stop-color="#a51f1f"/>
+    </linearGradient>
+  </defs>
+  <!-- sole -->
+  <path d="M14 132 q-6 -16 14 -18 l196 0 q22 0 24 16 q1 14 -16 16 l-204 0 q-16 0 -18 -14 z"
+        fill="#f2efe9" stroke="#1b1b1b" stroke-width="2"/>
+  <!-- red sole accent -->
+  <path d="M14 132 q-6 -16 14 -18 l196 0 q22 0 24 16 l-234 2 z" fill="#c62a26" opacity="0.18"/>
+  <!-- midsole stitch -->
+  <path d="M20 124 l210 0" stroke="#1b1b1b" stroke-width="1.5" stroke-dasharray="5 5" fill="none"/>
+  <!-- black upper base -->
+  <path d="M34 116 q-6 -54 36 -74 q22 -10 44 -8 l8 28 q26 2 50 12 q30 12 34 50 l-6 6 z"
+        fill="#16151a"/>
+  <!-- red panels -->
+  <path d="M70 42 q22 -10 44 -8 l8 28 q-30 2 -52 12 q-6 -22 0 -32 z" fill="url(#upper)"/>
+  <path d="M138 64 q26 4 44 16 q22 14 26 42 l-70 4 q-6 -34 0 -62 z" fill="url(#upper)"/>
+  <!-- toe cap -->
+  <path d="M34 116 q-4 -22 16 -34 q14 -6 26 -2 l4 38 z" fill="#16151a"/>
+  <!-- swoosh-evocative wing mark -->
+  <path d="M96 70 q40 -14 78 6 q-30 -6 -74 14 z" fill="#f2efe9"/>
+  <!-- laces -->
+  <g stroke="#f2efe9" stroke-width="5" stroke-linecap="round">
+    <line x1="92" y1="58" x2="120" y2="50"/>
+    <line x1="96" y1="74" x2="124" y2="66"/>
+    <line x1="100" y1="90" x2="128" y2="82"/>
+  </g>
+  <!-- collar -->
+  <path d="M150 36 q22 0 30 18 q-16 -8 -34 -4 z" fill="#16151a"/>
+  <!-- wing logo dot -->
+  <circle cx="60" cy="96" r="6" fill="#f2efe9"/>
+</svg>

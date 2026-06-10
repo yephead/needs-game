@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 136" width="220" height="136">
+  <defs>
+    <linearGradient id="capg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2c4a36"/>
+      <stop offset="1" stop-color="#16271c"/>
+    </linearGradient>
+  </defs>
+  <!-- crown -->
+  <path d="M30 90 q-6 -76 80 -76 q86 0 80 76 q-80 22 -160 0 z" fill="url(#capg)"/>
+  <!-- panel seams -->
+  <g stroke="#0d1812" stroke-width="2" opacity="0.6" fill="none">
+    <path d="M110 14 l0 78"/><path d="M70 18 q14 40 0 74"/><path d="M150 18 q-14 40 0 74"/>
+  </g>
+  <!-- brim -->
+  <path d="M26 90 q84 26 168 0 q14 -2 18 10 q4 14 -16 18 q-92 22 -172 0 q-20 -6 -16 -18 q4 -12 18 -10 z"
+        fill="#1d3326" stroke="#0d1812" stroke-width="2"/>
+  <!-- web stripe band -->
+  <rect x="30" y="78" width="160" height="6" fill="#b23a3a"/>
+  <rect x="30" y="84" width="160" height="6" fill="#2f7d4f"/>
+  <!-- GG mark -->
+  <g fill="none" stroke="#e9c75a" stroke-width="5">
+    <circle cx="102" cy="54" r="12"/><circle cx="118" cy="54" r="12"/>
+  </g>
+</svg>

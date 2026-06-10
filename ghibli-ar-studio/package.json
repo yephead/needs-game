@@ -1,0 +1,33 @@
+{
+  "name": "ghibli-ar-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-time MediaPipe AR studio: live camera with brand product overlays + Studio Ghibli stylization (on-device WebGL + cloud hi-fi).",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "keywords": [
+    "mediapipe",
+    "ar",
+    "webgl",
+    "style-transfer",
+    "ghibli",
+    "camera"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.18"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tsconfig/svelte": "^5.0.8",
+    "svelte": "^5.55.7",
+    "svelte-check": "^4.4.8",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  }
+}

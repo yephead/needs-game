@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 160" width="200" height="160">
+  <defs>
+    <linearGradient id="leather" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9b1c2e"/>
+      <stop offset="1" stop-color="#6e1320"/>
+    </linearGradient>
+    <linearGradient id="chain" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f6e27a"/>
+      <stop offset="1" stop-color="#9a781f"/>
+    </linearGradient>
+  </defs>
+  <!-- chain strap -->
+  <path d="M40 26 q60 -36 120 0" fill="none" stroke="url(#chain)" stroke-width="7"
+        stroke-linecap="round" stroke-dasharray="2 6"/>
+  <!-- body -->
+  <rect x="28" y="38" width="144" height="104" rx="14" fill="url(#leather)" stroke="#3c0a12" stroke-width="2"/>
+  <!-- flap -->
+  <path d="M28 52 q0 -14 14 -14 l116 0 q14 0 14 14 l0 30 q-72 18 -144 0 z" fill="#86182a"/>
+  <!-- quilting -->
+  <g stroke="#b8324a" stroke-width="1.6" opacity="0.7">
+    <line x1="48" y1="92" x2="92" y2="60"/><line x1="78" y1="100" x2="122" y2="68"/>
+    <line x1="108" y1="108" x2="152" y2="76"/><line x1="92" y1="60" x2="136" y2="92"/>
+    <line x1="62" y1="84" x2="106" y2="116"/><line x1="120" y1="68" x2="156" y2="96"/>
+  </g>
+  <!-- GG clasp -->
+  <g fill="none" stroke="url(#chain)" stroke-width="5">
+    <circle cx="92" cy="98" r="11"/><circle cx="108" cy="98" r="11"/>
+  </g>
+</svg>
