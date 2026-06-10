@@ -5,7 +5,10 @@
   "type": "module",
   "description": "Real-time MediaPipe AR studio: live camera with brand product overlays + Studio Ghibli stylization (on-device WebGL + cloud hi-fi).",
   "scripts": {
+    "copy-wasm": "node scripts/copy-wasm.mjs",
+    "predev": "npm run copy-wasm",
     "dev": "vite --host 127.0.0.1",
+    "prebuild": "npm run copy-wasm",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"

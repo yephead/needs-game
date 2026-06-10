@@ -16,11 +16,25 @@ import type {
 import { DEFAULT_VISION_CONFIG } from "./types";
 
 /**
- * Keep the CDN wasm bundle pinned to the installed package version so the JS glue
- * and the wasm core never drift. Bump this together with package.json.
+ * The wasm runtime is copied out of node_modules into /public/vendor at build
+ * time (see scripts/copy-wasm.mjs), so it is served same-origin — no dependency
+ * on a third-party CDN that a corporate/mobile network might block. We probe it
+ * and fall back to the version-pinned jsdelivr copy only if the local files are
+ * somehow absent.
  */
 const TASKS_VISION_VERSION = "0.10.35";
-const WASM_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`;
+const LOCAL_WASM_BASE = `${import.meta.env.BASE_URL}vendor/mediapipe/wasm`;
+const CDN_WASM_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`;
+
+async function resolveWasmBase(): Promise<string> {
+  try {
+    const res = await fetch(`${LOCAL_WASM_BASE}/vision_wasm_internal.js`, { method: "HEAD" });
+    if (res.ok) return LOCAL_WASM_BASE;
+  } catch {
+    /* fall through to CDN */
+  }
+  return CDN_WASM_BASE;
+}
 
 /** Official model assets hosted by Google. */
 const MODELS = {
@@ -65,7 +79,8 @@ export class VisionEngine {
 
   private async getFileset() {
     if (!this.fileset) {
-      this.fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
+      const base = await resolveWasmBase();
+      this.fileset = await FilesetResolver.forVisionTasks(base);
     }
     return this.fileset;
   }
